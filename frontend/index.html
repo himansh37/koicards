@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KoiCards</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1e1e1e"/>
+    <meta name="description" content="Create Japanese flashcards from images with audio and mnemonics."/>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Favicon Links -->
+    <link rel="icon" type="image/png" href="./favicon-96x96.png" sizes="96x96" />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+      
+    <style>
+         :root {
+             --bg-color: #121212;
+             --container-bg-color: #1e1e1e;
+             --text-primary-color: #e0e0e0;
+             --text-secondary-color: #b3b3b3;
+             --button-bg-color: #333333;
+             --button-hover-bg-color: #444444;
+             --card-front-bg-color: #2a2a2a;
+             --card-front-text-color: #ffffff;
+             --card-back-bg-color: #3d3d3d;
+             --card-back-text-color: #ffffff;
+             --deck-item-bg-color: #252525;
+             --modal-bg-color: #252525;
+             --modal-text-color: #e0e0e0;
+             --input-bg-color: #333333;
+             --input-border-color: #555555;
+             --input-text-color: #e0e0e0;
+             --toast-bg-color: #333333;
+             --toast-text-color: #ffffff;
+             --spinner-color: #cccccc;
+             --test-option-bg: #333333a0;
+             --test-option-hover-bg: #444444b0;
+             --test-correct-bg: #22c55ea0;
+             --test-incorrect-bg: #ef4444a0;
+             --streak-color: #f59e0b;
+         }
+
+         [data-theme="light"] {
+             --bg-color: #f3f4f6;
+             --container-bg-color: #ffffff;
+             --text-primary-color: #1f2937;
+             --text-secondary-color: #6b7280;
+             --button-bg-color: #4f46e5;
+             --button-hover-bg-color: #4338ca;
+             --card-front-bg-color: #fef08a;
+             --card-front-text-color: #4b5563;
+             --card-back-bg-color: #60a5fa;
+             --card-back-text-color: #ffffff;
+             --deck-item-bg-color: #f9fafb;
+             --modal-bg-color: #ffffff;
+             --modal-text-color: #1f2937;
+             --input-bg-color: #ffffff;
+             --input-border-color: #d1d5db;
+             --input-text-color: #1f2937;
+             --toast-bg-color: #1f2937;
+             --toast-text-color: #ffffff;
+             --spinner-color: #4f46e5;
+             --test-option-bg: #e5e7eba0;
+             --test-option-hover-bg: #d1d5dbb0;
+             --test-correct-bg: #4ade80a0;
+             --test-incorrect-bg: #f87171a0;
+             --streak-color: #f97316;
+         }
+
+         body {
+             font-family: 'Inter', sans-serif;
+             background-color: var(--bg-color);
+             color: var(--text-primary-color);
+             margin: 0;
+             padding: 2rem;
+             display: flex;
+             flex-direction: column;
+             align-items: center;
+             min-height: 100vh;
+             transition: background-color 0.3s, color 0.3s;
+         }
+         .container {
+             position: relative; /* Added for positioning streak display */
+             max-width: 800px;
+             width: 100%;
+             background-color: var(--container-bg-color);
+             border-radius: 1.5rem;
+             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+             padding: 2rem;
+             margin-top: 2rem;
+             text-align: center;
+             margin-bottom: 2rem;
+             transition: background-color 0.3s;
+         }
+         .flashcard-container {
+             perspective: 1000px;
+             height: 300px;
+             width: 100%;
+             max-width: 400px;
+             margin: 2rem auto;
+             display: none;
+         }
+         .flashcard {
+             width: 100%;
+             height: 100%;
+             position: relative;
+             transform-style: preserve-3d;
+             transition: transform 0.6s;
+             cursor: pointer;
+             border-radius: 0.75rem;
+             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+         }
+         .flashcard.flipped {
+             transform: rotateY(180deg);
+         }
+         .front, .back {
+             position: absolute;
+             width: 100%;
+             height: 100%;
+             backface-visibility: hidden;
+             display: flex;
+             flex-direction: column; 
+             align-items: center;
+             justify-content: center;
+             font-size: 1.25rem;
+             font-weight: bold;
+             padding: 1rem;
+             border-radius: 0.75rem;
+             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+             text-align: center;
+             transition: background-color 0.3s, color 0.3s;
+         }
+         .front {
+             background-color: var(--card-front-bg-color);
+             color: var(--card-front-text-color);
+         }
+         .back {
+             background-color: var(--card-back-bg-color);
+             color: var(--card-back-text-color);
+             transform: rotateY(180deg);
+         }
+         .loading-spinner {
+             border: 4px solid rgba(0, 0, 0, 0.1);
+             border-top: 4px solid var(--spinner-color);
+             border-radius: 50%;
+             width: 40px;
+             height: 40px;
+             animation: spin 1s linear infinite;
+             margin: 2rem auto;
+             display: none;
+         }
+         @keyframes spin {
+             0% { transform: rotate(0deg); }
+             100% { transform: rotate(360deg); }
+         }
+         .button-group {
+             display: flex;
+             justify-content: center;
+             gap: 1rem;
+             margin-top: 1rem;
+         }
+         .deck-list-item, .progress-list-item {
+             display: flex;
+             justify-content: space-between;
+             align-items: center;
+             padding: 0.75rem 1rem;
+             background-color: var(--deck-item-bg-color);
+             border-radius: 0.75rem;
+             margin-bottom: 0.5rem;
+             transition: background-color 0.3s;
+             cursor: pointer;
+         }
+         /* Style for drag and drop */
+         .deck-list-item, .progress-list-item {
+             cursor: grab;
+         }
+         .dragging {
+             opacity: 0.4;
+         }
+
+         .progress-visual {
+             display: flex;
+             align-items: center;
+             gap: 0.75rem;
+         }
+         .progress-icon {
+             font-size: 1.5rem;
+         }
+         .modal-overlay {
+             position: fixed;
+             top: 0; left: 0; right: 0; bottom: 0;
+             background-color: rgba(0, 0, 0, 0.5);
+             display: flex;
+             justify-content: center;
+             align-items: center;
+             z-index: 1000;
+         }
+         .modal-content {
+             background-color: var(--modal-bg-color);
+             color: var(--modal-text-color);
+             padding: 2rem;
+             border-radius: 1rem;
+             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+             width: 90%;
+             max-width: 500px;
+             transition: background-color 0.3s, color 0.3s;
+             max-height: 90vh;
+             overflow-y: auto;
+         }
+         #deck-name-input {
+             background-color: var(--input-bg-color);
+             border: 1px solid var(--input-border-color);
+             color: var(--input-text-color);
+         }
+         #toast-notification {
+             position: fixed;
+             bottom: 20px;
+             left: 50%;
+             transform: translateX(-50%);
+             background-color: var(--toast-bg-color);
+             color: var(--toast-text-color);
+             padding: 1rem 1.5rem;
+             border-radius: 0.75rem;
+             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+             z-index: 2000;
+             opacity: 0;
+             transition: opacity 0.3s, bottom 0.3s, background-color 0.3s, color 0.3s;
+         }
+         #toast-notification.show {
+             opacity: 1;
+             bottom: 30px;
+         }
+         .speaker-btn {
+             position: absolute;
+             bottom: 15px;
+             right: 15px;
+             cursor: pointer;
+             background: none;
+             border: none;
+             padding: 0;
+         }
+         .speaker-btn svg {
+             width: 24px;
+             height: 24px;
+             fill: currentColor;
+             opacity: 0.6;
+             transition: opacity 0.2s;
+         }
+         .speaker-btn:hover svg {
+             opacity: 1;
+         }
+         .speaker-btn.loading svg {
+             animation: spin 1s linear infinite;
+         }
+         #theme-toggle, #install-app-btn {
+             position: fixed;
+             top: 1rem;
+             background-color: var(--container-bg-color);
+             border: none;
+             border-radius: 50%;
+             cursor: pointer;
+             width: 40px;
+             height: 40px;
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+             z-index: 2001;
+         }
+         #theme-toggle {
+             right: 1rem;
+         }
+         #install-app-btn {
+             right: 4rem; /* Position next to theme toggle */
+         }
+         #theme-toggle svg, #install-app-btn svg {
+             width: 20px;
+             height: 20px;
+             fill: var(--text-primary-color);
+         }
+         
+         #test-view {
+             position: relative;
+             overflow: hidden;
+             z-index: 1;
+         }
+         #test-view::before {
+             content: '';
+             position: absolute;
+             top: 0; left: 0; right: 0; bottom: 0;
+             background-image: url("./sakura.jpg");
+             background-size: cover;
+             background-position: center;
+             z-index: -1;
+             border-radius: 1.5rem;
+            
+         }
+         #test-container {
+             width: 100%;
+             margin-top: 2rem;
+         }
+         #test-question {
+             margin-bottom: 2rem;
+             color: var(--text-primary-color);
+             line-height: 1.2;
+             min-height: 100px;
+         }
+         #test-options {
+             display: grid;
+             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+             gap: 1rem;
+         }
+         .test-option-btn {
+             background-color: var(--test-option-bg);
+             color: var(--text-primary-color);
+             border: 1px solid rgba(255, 255, 255, 0.1);
+             padding: 1rem;
+             border-radius: 0.75rem;
+             font-size: 1.1rem;
+             cursor: pointer;
+             transition: background-color 0.2s, transform 0.2s;
+             text-align: center;
+             display: flex;
+             flex-direction: column;
+             justify-content: center;
+             align-items: center;
+             min-height: 80px;
+             backdrop-filter: blur(5px);
+         }
+         .test-option-btn:hover:not(:disabled) {
+             background-color: var(--test-option-hover-bg);
+             transform: translateY(-2px);
+         }
+         .test-option-btn.correct {
+             background-color: var(--test-correct-bg);
+             color: white;
+         }
+         .test-option-btn.incorrect {
+             background-color: var(--test-incorrect-bg);
+             color: white;
+         }
+         .test-option-btn:disabled {
+             cursor: not-allowed;
+             opacity: 0.7;
+         }
+         #test-progress {
+             margin-top: 2rem;
+             font-size: 1.2rem;
+             color: var(--text-secondary-color);
+         }
+         #streak-display {
+             position: absolute;
+             top: 1.5rem;
+             right: 1.5rem;
+             display: flex;
+             align-items: center;
+             gap: 0.5rem;
+             background-color: var(--deck-item-bg-color);
+             padding: 0.5rem 1rem;
+             border-radius: 9999px;
+             font-weight: bold;
+             color: var(--streak-color);
+             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+         }
+         #streak-display svg {
+             width: 20px;
+             height: 20px;
+             fill: currentColor;
+         }
+
+         .star-btn {
+             position: absolute;
+             top: 15px;
+             right: 15px;
+             cursor: pointer;
+             background: none;
+             border: none;
+             padding: 0;
+             opacity: 0.6;
+             transition: opacity 0.2s;
+         }
+         .star-btn:hover {
+             opacity: 1;
+         }
+         .star-btn svg {
+             width: 24px;
+             height: 24px;
+             fill: currentColor;
+         }
+         .star-btn.starred svg {
+             color: gold;
+         }
+         .deck-select-item {
+             display: flex;
+             align-items: center;
+             justify-content: space-between;
+             padding: 0.75rem 1rem;
+             background-color: var(--deck-item-bg-color);
+             border-radius: 0.75rem;
+             margin-bottom: 0.5rem;
+         }
+        .motivational-message {
+            display: none; /* Changed from flex to prevent layout gap */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 1.5rem;
+            font-style: italic;
+            /* Sizing: 20% larger than flashcard */
+            height: 360px;
+            max-width: 480px;
+            margin: 2rem auto;
+            /* Transition properties */
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+        .motivational-message.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+         .result-item.correct {
+             color: #22c55e;
+         }
+         .result-item.incorrect {
+             color: #ef4444;
+         }
+    </style>
+</head>
+<body data-theme="dark">
+    <!-- UI Buttons -->
+    <button id="theme-toggle" title="Toggle theme"></button>
+    <button id="install-app-btn" title="Install App" style="display: none;"></button>
+    
+    <div id="main-content" class="w-full">
+        <div class="container p-8">
+            <div id="streak-display">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12.82 3.3C12.42 2.5 11.58 2.5 11.18 3.3L10.5 4.7C9.3 4.2 8.3 4.7 7.9 5.8L7.3 7.5C6.8 8.7 7.3 9.7 8.5 10.2L9.8 10.8C10.2 11 10.2 11.6 9.9 11.8C9.5 12.2 8.9 12.1 8.5 11.8L7.2 11.2C6 10.7 5 11.2 4.5 12.3L3.9 14C3.4 15.2 3.9 16.2 5.1 16.7L6.4 17.3C6.8 17.5 6.8 18.1 6.5 18.3C6.1 18.7 5.5 18.6 5.1 18.3L3.8 17.7C2.6 17.2 1.6 17.7 1.1 18.8L0.5 20.5C-0.2 22.1 1.2 23.5 2.8 22.8L18.7 16.2C20.3 15.5 21.2 13.6 20.3 12L19.2 9.5C18.7 8.5 17.5 8.1 16.5 8.6L15.2 9.2C14.8 9.4 14.2 9.2 14 8.8C13.6 8.4 13.8 7.8 14.2 7.6L15.5 7C16.7 6.5 17.2 5.5 16.7 4.3L16.1 2.6C15.6 1.4 14.6 0.9 13.4 1.4L12.2 2C11.7 2.1 11.4 2.7 11.6 3.1C11.9 3.5 12.5 3.7 12.9 3.5L12.82 3.3Z"/></svg>
+                <span id="streak-count">0</span>
+            </div>
+
+            <h1 class="text-4xl font-extrabold" style="color: var(--text-primary-color);">Japanese Flashcard Creator</h1>
+            <p class="mb-8" style="color: var(--text-secondary-color);">Upload an image to create flashcards with audio and mnemonics.</p>
+
+            <div class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4">
+                <label for="imageUpload" class="cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-md">
+                    Choose Image
+                </label>
+                <input type="file" id="imageUpload" accept="image/*" class="hidden">
+                <button id="generateBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-md">
+                    Generate Flashcards
+                </button>
+            </div>
+
+            <div id="statusMessage" class="text-sm mt-4" style="color: var(--text-secondary-color);"></div>
+            <div id="loading" class="loading-spinner"></div>
+        </div>
+        
+        <!-- Motivational Message Display -->
+        <div id="motivational-message-display" class="container p-8 motivational-message">
+            <!-- Image class updated for better fitting -->
+            <img id="motivational-image" src="" alt="Motivational Image" class="w-full h-full mb-4 rounded-lg object-contain" style="display: none;">
+           <button id="continue-study-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-4 text-base rounded-xl transition duration-300 shadow-md">
+    Continue Studying
+</button>
+        </div>
+
+        <div id="flashcard-display" class="w-full flex-col items-center" style="display: none;">
+            <div id="current-flashcard" class="flashcard-container"></div>
+            <div id="repetition-buttons" class="button-group" style="display: none;">
+                <button id="dont-repeat-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl shadow-md">Don't Repeat</button>
+                <button id="repeat-btn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-xl shadow-md">Repeat</button>
+                <button id="repeat-frequently-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-md">Repeat Frequently</button>
+            </div>
+            <div class="mt-4">
+                 <button id="saveDeckBtn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-md">Save Current Deck</button>
+            </div>
+        </div>
+
+        <div id="decks-container" class="container p-8">
+            <h2 class="text-2xl font-bold mb-4" style="color: var(--text-primary-color);">My Decks</h2>
+            <div class="flex flex-col md:flex-row items-center justify-center space-y-2 md:space-y-0 md:space-x-4 mb-4">
+                 <button id="selectTestDecksBtn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-md">Select Decks for Test</button>
+                 <button id="selectStudyDecksBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-md">Select Decks for Study</button>
+            </div>
+            <div id="deck-list" class="space-y-2"></div>
+        </div>
+
+        <div id="progress-container" class="container p-8">
+            <h2 class="text-2xl font-bold mb-4" style="color: var(--text-primary-color);">My Progress</h2>
+            <div id="progress-list" class="space-y-2"></div>
+            <div id="progress-chart-container" class="mt-8" style="display: none;">
+                <h3 id="chart-title" class="text-xl font-bold mb-4"></h3>
+                <canvas id="progress-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test View Container -->
+    <div id="test-view" class="container p-8" style="display: none;">
+        <div id="test-container">
+            <h2 class="text-3xl font-bold mb-6" style="color: var(--text-primary-color);">Test Mode</h2>
+            <div id="test-question" class="mb-8"></div>
+            <div id="test-options" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            <p id="test-progress" class="mt-8"></p>
+            <button id="exit-test-btn" class="mt-8 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">Exit Test</button>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="deck-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-xl font-bold mb-4">Save Deck</h3>
+            <input type="text" id="deck-name-input" placeholder="Enter deck name" class="w-full p-2 rounded-lg mb-4">
+            <div class="flex justify-end space-x-2">
+                <button id="modal-cancel-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                <button id="modal-save-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="test-type-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold mb-4">Choose Test Type</h3>
+            <div class="flex flex-col space-y-4">
+                <button id="ja-to-en-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg">Japanese to English</button>
+                <button id="en-to-ja-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg">English to Japanese</button>
+            </div>
+             <button id="test-type-cancel-btn" class="mt-6 w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+        </div>
+    </div>
+
+    <div id="select-decks-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 id="select-modal-title" class="text-xl font-bold mb-4">Select Decks for Test</h3>
+            <div id="deck-selection-list" class="space-y-2 mb-4"></div>
+            <div class="flex justify-end space-x-2">
+                <button id="select-modal-cancel-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                <button id="select-modal-primary-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Start Test</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="test-results-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content text-center">
+            <h3 class="text-2xl font-bold mb-4">Test Complete!</h3>
+            <div class="flex justify-around items-center my-6">
+                <div>
+                    <p class="text-lg" style="color: var(--text-secondary-color);">Score</p>
+                    <p id="final-score" class="text-4xl font-bold"></p>
+                </div>
+                <div>
+                    <p class="text-lg" style="color: var(--text-secondary-color);">Time Taken</p>
+                    <p id="time-taken" class="text-4xl font-bold"></p>
+                </div>
+            </div>
+            <div id="results-breakdown" class="text-left mt-6 space-y-2">
+                <h4 class="text-xl font-bold mb-2">Review:</h4>
+                <!-- Breakdown will be inserted here -->
+            </div>
+            <button id="close-results-btn" class="mt-8 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg">Close</button>
+        </div>
+    </div>
+    
+    <div id="toast-notification">Deck saved!</div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Element Selectors ---
+            const imageUpload = document.getElementById('imageUpload');
+            const generateBtn = document.getElementById('generateBtn');
+            const flashcardDisplay = document.getElementById('flashcard-display');
+            const currentFlashcard = document.getElementById('current-flashcard');
+            const loadingSpinner = document.getElementById('loading');
+            const statusMessage = document.getElementById('statusMessage');
+            const repetitionButtons = document.getElementById('repetition-buttons');
+            const dontRepeatBtn = document.getElementById('dont-repeat-btn');
+            const repeatBtn = document.getElementById('repeat-btn');
+            const repeatFrequentlyBtn = document.getElementById('repeat-frequently-btn');
+            const saveDeckBtn = document.getElementById('saveDeckBtn');
+            const deckList = document.getElementById('deck-list');
+            const progressList = document.getElementById('progress-list');
+            const deckModal = document.getElementById('deck-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const deckNameInput = document.getElementById('deck-name-input');
+            const modalCancelBtn = document.getElementById('modal-cancel-btn');
+            const modalSaveBtn = document.getElementById('modal-save-btn');
+            const toastNotification = document.getElementById('toast-notification');
+            const themeToggleBtn = document.getElementById('theme-toggle');
+            const installBtn = document.getElementById('install-app-btn');
+            const mainContent = document.getElementById('main-content');
+            const testView = document.getElementById('test-view');
+            const testQuestion = document.getElementById('test-question');
+            const testOptions = document.getElementById('test-options');
+            const testProgress = document.getElementById('test-progress');
+            const exitTestBtn = document.getElementById('exit-test-btn');
+            const testTypeModal = document.getElementById('test-type-modal');
+            const jaToEnBtn = document.getElementById('ja-to-en-btn');
+            const enToJaBtn = document.getElementById('en-to-ja-btn');
+            const testTypeCancelBtn = document.getElementById('test-type-cancel-btn');
+            const testResultsModal = document.getElementById('test-results-modal');
+            const finalScore = document.getElementById('final-score');
+            const timeTaken = document.getElementById('time-taken');
+            const resultsBreakdown = document.getElementById('results-breakdown');
+            const closeResultsBtn = document.getElementById('close-results-btn');
+            const streakCount = document.getElementById('streak-count');
+            const selectTestDecksBtn = document.getElementById('selectTestDecksBtn');
+            const selectStudyDecksBtn = document.getElementById('selectStudyDecksBtn');
+            const selectDecksModal = document.getElementById('select-decks-modal');
+            const selectModalTitle = document.getElementById('select-modal-title');
+            const deckSelectionList = document.getElementById('deck-selection-list');
+            const selectModalCancelBtn = document.getElementById('select-modal-cancel-btn');
+            const selectModalPrimaryBtn = document.getElementById('select-modal-primary-btn');
+            const motivationalMessageDisplay = document.getElementById('motivational-message-display');
+            const motivationalImage = document.getElementById('motivational-image');
+            const continueStudyBtn = document.getElementById('continue-study-btn');
+            const progressChartContainer = document.getElementById('progress-chart-container');
+            const chartTitle = document.getElementById('chart-title');
+            const progressChartCanvas = document.getElementById('progress-chart');
+
+            // --- State Variables ---
+            let uploadedFile = null;
+            let lastMotivationalImageIndex = -1; 
+            let flashcardsData = [];
+            let currentCardIndex = 0;
+            let modalMode = 'save';
+            let deckToRename = '';
+            let testQuestions = [];
+            let currentTestQuestionIndex = 0;
+            let score = 0;
+            let deckForTest = '';
+            let japaneseVoice = null;
+            let voicePromise = null;
+            let currentSelectionMode = ''; // 'test' or 'study'
+            let cardsStudiedCount = 0;
+            let testStartTime;
+            let testResults = [];
+            let progressChart = null;
+
+            const motivationalImages = [
+                "./me.png",
+                "./goat.jpg",
+                "./whiplash.jpg",
+                "./ngu.jpg",
+                "./img2.jpg",
+                "./img3.jpg",
+                "./img4.jpg"
+            ];
+
+            // --- THEME & ICON LOGIC ---
+            const sunIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM12 9c1.65 0 3 1.35 3 3s-1.35 3-3 3-3-1.35-3-3 1.35-3 3-3zm0-7c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1V3c0-.55.45-1 1-1zm0 18c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1v-2c0-.55.45-1 1-1zm-7-11H3c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1s-.45 1-1 1zm18 0h-2c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1s-.45 1-1 1zM5.64 5.64c-.39-.39-1.02-.39-1.41 0s-.39 1.02 0 1.41l1.41 1.41c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41L5.64 5.64zm12.72 12.72c-.39-.39-1.02-.39-1.41 0s-.39 1.02 0 1.41l1.41 1.41c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41l-1.41-1.41zM5.64 18.36l1.41-1.41c.39-.39.39-1.02 0-1.41s-1.02-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.02 0 1.41s1.02.39 1.41 0zm12.72-12.72l1.41-1.41c.39-.39.39-1.02 0-1.41s-1.02-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.02 0 1.41s1.02.39 1.41 0z"/></svg>`;
+            const moonIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12.3 4.9c-.3-.2-.7-.1-1 .1-.3.2-.4.6-.3.9 1.5 4.3 1.1 9.2-1.2 13.1-.3.4-.2.9.2 1.2.2.2.4.2.7.2.2 0 .5-.1.6-.3 2.8-4.6 3.2-10.2 1.3-15.2z"/></svg>`;
+            const installIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`;
+            installBtn.innerHTML = installIcon;
+
+            function setTheme(theme) {
+                document.body.dataset.theme = theme;
+                localStorage.setItem('koicards_theme', theme);
+                themeToggleBtn.innerHTML = theme === 'light' ? moonIcon : sunIcon;
+            }
+
+            themeToggleBtn.addEventListener('click', () => {
+                const currentTheme = document.body.dataset.theme;
+                setTheme(currentTheme === 'light' ? 'dark' : 'light');
+            });
+
+            const savedTheme = localStorage.getItem('koicards_theme') || 'dark';
+            setTheme(savedTheme);
+
+            // --- AUDIO GENERATION AND PLAYBACK ---
+            function getJapaneseVoice() {
+                if (voicePromise) return voicePromise;
+
+                voicePromise = new Promise((resolve, reject) => {
+                    const getVoices = () => {
+                        const voices = window.speechSynthesis.getVoices();
+                        if (voices.length > 0) {
+                            japaneseVoice = voices.find(voice => voice.lang === 'ja-JP');
+                            if (japaneseVoice) {
+                                resolve(japaneseVoice);
+                            } else {
+                                reject(new Error("Japanese voice not found in browser."));
+                            }
+                        }
+                    };
+
+                    if (window.speechSynthesis.getVoices().length > 0) {
+                        getVoices();
+                    } else {
+                        window.speechSynthesis.onvoiceschanged = getVoices;
+                    }
+                });
+                return voicePromise;
+            }
+
+            async function playJapaneseAudio(text, buttonElement) {
+                if (!text || text.trim() === '') {
+                    showToast("No valid text to read.");
+                    return;
+                }
+
+                buttonElement.classList.add('loading');
+                try {
+                    const voice = await getJapaneseVoice();
+                    window.speechSynthesis.cancel();
+
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.voice = voice;
+                    utterance.lang = 'ja-JP';
+                    utterance.rate = 0.9;
+
+                    utterance.onend = () => buttonElement.classList.remove('loading');
+                    utterance.onerror = (event) => {
+                        console.error('Speech synthesis error:', event.error);
+                        buttonElement.classList.remove('loading');
+                    };
+
+                    window.speechSynthesis.speak(utterance);
+                } catch (error) {
+                    console.error(error.message);
+                    showToast(error.message);
+                    buttonElement.classList.remove('loading');
+                }
+            }
+
+
+            // --- DATA MANAGEMENT & PROGRESS LOGIC ---
+            function getSavedDecks() { return JSON.parse(localStorage.getItem('flashcardDecks') || '{}'); }
+            function saveDecks(decks) { localStorage.setItem('flashcardDecks', JSON.stringify(decks)); }
+            
+            // Functions for managing deck and progress order
+            function getDeckOrder() {
+                const decks = getSavedDecks();
+                let order = JSON.parse(localStorage.getItem('deckOrder') || 'null');
+                const deckNames = Object.keys(decks);
+
+                if (!order) { return deckNames; }
+                
+                let newOrder = order.filter(deckName => deckNames.includes(deckName));
+                deckNames.forEach(deckName => {
+                    if (!newOrder.includes(deckName)) { newOrder.push(deckName); }
+                });
+
+                if (JSON.stringify(order) !== JSON.stringify(newOrder)) { saveDeckOrder(newOrder); }
+                
+                return newOrder;
+            }
+            function saveDeckOrder(order) { localStorage.setItem('deckOrder', JSON.stringify(order)); }
+
+            function getProgressOrder() {
+                const decks = getSavedDecks();
+                let order = JSON.parse(localStorage.getItem('progressOrder') || 'null');
+                const deckNames = Object.keys(decks);
+
+                if (!order) { return deckNames; }
+                
+                let newOrder = order.filter(deckName => deckNames.includes(deckName));
+                deckNames.forEach(deckName => {
+                    if (!newOrder.includes(deckName)) { newOrder.push(deckName); }
+                });
+
+                if (JSON.stringify(order) !== JSON.stringify(newOrder)) { saveProgressOrder(newOrder); }
+                
+                return newOrder;
+            }
+            function saveProgressOrder(order) { localStorage.setItem('progressOrder', JSON.stringify(order)); }
+
+
+            function getTestHistory() { return JSON.parse(localStorage.getItem('testHistory') || '[]'); }
+            function saveTestHistory(history) { localStorage.setItem('testHistory', JSON.stringify(history)); }
+
+            function showToast(message) {
+                toastNotification.textContent = message;
+                toastNotification.classList.add('show');
+                setTimeout(() => { toastNotification.classList.remove('show'); }, 3000);
+            }
+
+            function getSunProgressIcon(averageScore) {
+                if (averageScore > 80) return '☀️'; 
+                if (averageScore > 60) return '🌤️'; 
+                if (averageScore > 40) return '🌥️'; 
+                if (averageScore > 20) return '☁️'; 
+                return '🌑'; 
+            }
+
+            // --- STREAK LOGIC ---
+            function renderStreak() {
+                const streakData = JSON.parse(localStorage.getItem('studyStreak')) || { count: 0 };
+                streakCount.textContent = streakData.count;
+            }
+
+            function checkAndResetStreak() {
+                const today = new Date();
+                const todayDateString = today.toISOString().split('T')[0];
+                let streakData = JSON.parse(localStorage.getItem('studyStreak')) || { count: 0, lastDate: null };
+
+                if (!streakData.lastDate || streakData.lastDate === todayDateString) {
+                    return; 
+                }
+
+                const yesterday = new Date(today);
+                yesterday.setDate(today.getDate() - 1);
+                const yesterdayDateString = yesterday.toISOString().split('T')[0];
+
+                if (streakData.lastDate !== yesterdayDateString) {
+                    streakData.count = 0;
+                    localStorage.setItem('studyStreak', JSON.stringify(streakData));
+                }
+            }
+
+            function updateStreak() {
+                const today = new Date();
+                const todayDateString = today.toISOString().split('T')[0];
+                let streakData = JSON.parse(localStorage.getItem('studyStreak')) || { count: 0, lastDate: null };
+
+                if (streakData.lastDate === todayDateString) {
+                    return;
+                }
+
+                const yesterday = new Date(today);
+                yesterday.setDate(today.getDate() - 1);
+                const yesterdayDateString = yesterday.toISOString().split('T')[0];
+
+                if (streakData.lastDate === yesterdayDateString) {
+                    streakData.count++;
+                } else {
+                    streakData.count = 1;
+                }
+
+                streakData.lastDate = todayDateString;
+                localStorage.setItem('studyStreak', JSON.stringify(streakData));
+                renderStreak();
+            }
+            
+            // --- UI RENDERING ---
+            function renderAll() {
+                renderDeckList();
+                renderProgressView();
+                renderStreak();
+            }
+
+            function renderDeckList() {
+                const decks = getSavedDecks();
+                const deckOrder = getDeckOrder();
+                deckList.innerHTML = '';
+
+                if (deckOrder.length === 0) {
+                    deckList.innerHTML = `<p style="color: var(--text-secondary-color);">You have no saved decks.</p>`;
+                    return;
+                }
+
+                deckOrder.forEach(deckName => {
+                    const deck = decks[deckName];
+                    if (!deck) return;
+
+                    const deckItem = document.createElement('div');
+                    deckItem.className = 'deck-list-item';
+                    deckItem.setAttribute('draggable', 'true');
+                    deckItem.dataset.deckName = deckName;
+
+                    deckItem.innerHTML = `
+                        <span class="font-semibold" style="color: var(--text-primary-color);">${deckName} (${deck.length} cards)</span>
+                        <div class="flex items-center flex-wrap gap-2">
+                            <button data-deck-name="${deckName}" class="test-deck-btn bg-purple-500 hover:bg-purple-600 text-white font-bold py-1 px-3 rounded-lg text-sm">Test</button>
+                            <button data-deck-name="${deckName}" class="load-deck-btn bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded-lg text-sm">Load</button>
+                            <button data-deck-name="${deckName}" class="rename-deck-btn bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1 px-3 rounded-lg text-sm">Rename</button>
+                            <button data-deck-name="${deckName}" class="delete-deck-btn bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg text-sm">Delete</button>
+                        </div>
+                    `;
+                    deckList.appendChild(deckItem);
+                });
+            }
+
+
+            function renderProgressView() {
+                const decks = getSavedDecks();
+                const history = getTestHistory();
+                const progressOrder = getProgressOrder();
+                progressList.innerHTML = '';
+                 progressChartContainer.style.display = 'none';
+
+                if (progressOrder.length === 0) {
+                    progressList.innerHTML = `<p style="color: var(--text-secondary-color);">Complete a test to see your progress.</p>`;
+                    return;
+                }
+                
+                progressOrder.forEach(deckName => {
+                    if (!decks[deckName]) return;
+
+                    const deckHistory = history.filter(item => item.deckName === deckName);
+                    let averageScore = 0;
+                    if (deckHistory.length > 0) {
+                        const totalScore = deckHistory.reduce((sum, item) => sum + (item.score / item.total), 0);
+                        averageScore = (totalScore / deckHistory.length) * 100;
+                    }
+                    
+                    const progressIcon = getSunProgressIcon(averageScore);
+
+                    const progressItem = document.createElement('div');
+                    progressItem.className = 'progress-list-item';
+                    progressItem.setAttribute('draggable', 'true');
+                    progressItem.dataset.deckName = deckName;
+                    progressItem.innerHTML = `
+                        <span class="font-semibold" style="color: var(--text-primary-color);">${deckName}</span>
+                        <div class="progress-visual">
+                            <span class="progress-icon" title="Mastery: ${averageScore.toFixed(0)}%">${progressIcon}</span>
+                            <span class="font-semibold" style="color: var(--text-primary-color);">${averageScore.toFixed(0)}%</span>
+                        </div>
+                    `;
+                    progressList.appendChild(progressItem);
+                });
+            }
+            
+            progressList.addEventListener('click', (e) => {
+                const progressItem = e.target.closest('.progress-list-item');
+                if (progressItem && !e.target.closest('.dragging')) {
+                    const deckName = progressItem.dataset.deckName;
+                    renderProgressChart(deckName);
+                }
+            });
+            
+            function renderProgressChart(deckName) {
+                const history = getTestHistory().filter(item => item.deckName === deckName);
+
+                if (history.length < 2) {
+                    progressChartContainer.style.display = 'none';
+                    showToast(`Not enough test data for "${deckName}" to show a chart.`);
+                    return;
+                }
+                
+                chartTitle.textContent = `Progress for "${deckName}"`;
+                progressChartContainer.style.display = 'block';
+
+                const labels = history.map(item => new Date(item.date).toLocaleDateString());
+                const data = history.map(item => (item.score / item.total) * 100);
+
+                if (progressChart) {
+                    progressChart.destroy();
+                }
+
+                progressChart = new Chart(progressChartCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Score %',
+                            data: data,
+                            fill: false,
+                            borderColor: 'rgb(75, 192, 192)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+            }
+
+            // --- DECK SELECTION MODAL LOGIC ---
+            function openDeckSelectionModal(mode) {
+                currentSelectionMode = mode;
+                const deckNames = getDeckOrder(); // <-- THE FIX IS HERE
+                
+                if (deckNames.length === 0) {
+                    showToast("You need to create at least one deck first.");
+                    return;
+                }
+                
+                selectModalTitle.textContent = `Select Decks for ${mode === 'test' ? 'Test' : 'Study'}`;
+                selectModalPrimaryBtn.textContent = `Start ${mode === 'test' ? 'Test' : 'Study'}`;
+                
+                deckSelectionList.innerHTML = '';
+                deckNames.forEach(name => {
+                    const deckItem = document.createElement('div');
+                    deckItem.className = 'deck-select-item';
+                    deckItem.innerHTML = `
+                        <label class="font-semibold text-lg" style="color: var(--text-primary-color);">${name}</label>
+                        <input type="checkbox" name="selectedDecks" value="${name}" class="w-5 h-5 accent-purple-500">
+                    `;
+                    deckSelectionList.appendChild(deckItem);
+                });
+                selectDecksModal.style.display = 'flex';
+            }
+
+            selectTestDecksBtn.addEventListener('click', () => openDeckSelectionModal('test'));
+            selectStudyDecksBtn.addEventListener('click', () => openDeckSelectionModal('study'));
+            
+            selectModalCancelBtn.addEventListener('click', () => {
+                selectDecksModal.style.display = 'none';
+            });
+
+            selectModalPrimaryBtn.addEventListener('click', () => {
+                const selectedCheckboxes = document.querySelectorAll('#deck-selection-list input[type="checkbox"]:checked');
+                const selectedDeckNames = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+                if (selectedDeckNames.length === 0) {
+                    showToast("Please select at least one deck.");
+                    return;
+                }
+
+                const decks = getSavedDecks();
+                const combinedDeck = selectedDeckNames.flatMap(name => decks[name] || []);
+
+                if (combinedDeck.length < 4 && currentSelectionMode === 'test') {
+                    showToast("The selected decks must contain at least 4 cards combined to take a test.");
+                    return;
+                }
+
+                if (currentSelectionMode === 'test') {
+                    deckForTest = selectedDeckNames.join(', ');
+                    selectDecksModal.style.display = 'none';
+                    testTypeModal.style.display = 'flex';
+                    jaToEnBtn.onclick = () => { testTypeModal.style.display = 'none'; startTest(combinedDeck, 'ja-en'); };
+                    enToJaBtn.onclick = () => { testTypeModal.style.display = 'none'; startTest(combinedDeck, 'en-ja'); };
+                } else if (currentSelectionMode === 'study') {
+                    startStudySession(combinedDeck);
+                }
+            });
+
+
+            deckList.addEventListener('click', (e) => {
+                if (e.target.closest('.dragging')) return;
+
+                const deckName = e.target.dataset.deckName;
+                if (!deckName) return;
+
+                if (e.target.classList.contains('load-deck-btn')) {
+                    const decks = getSavedDecks();
+                    startStudySession(decks[deckName]);
+                }
+                
+                if (e.target.classList.contains('rename-deck-btn')) {
+                    modalMode = 'rename';
+                    deckToRename = deckName;
+                    modalTitle.textContent = 'Rename Deck';
+                    deckNameInput.value = deckName;
+                    deckModal.style.display = 'flex';
+                }
+
+                if (e.target.classList.contains('delete-deck-btn')) {
+                    const userConfirmed = confirm(`Are you sure you want to delete the deck "${deckName}"? This will also delete its test history.`);
+                    if (userConfirmed) {
+                        const decks = getSavedDecks();
+                        delete decks[deckName];
+                        saveDecks(decks);
+                        
+                        let history = getTestHistory();
+                        history = history.filter(item => item.deckName !== deckName);
+                        saveTestHistory(history);
+
+                        renderAll();
+                        showToast(`Deck "${deckName}" deleted.`);
+                    }
+                }
+                
+                if (e.target.classList.contains('test-deck-btn')) {
+                    const decks = getSavedDecks();
+                    const deck = decks[deckName];
+                    if (deck.length < 4) {
+                        showToast("A test requires at least 4 cards in the deck.");
+                        return;
+                    }
+                    deckForTest = deckName;
+                    testTypeModal.style.display = 'flex';
+                    jaToEnBtn.onclick = () => { testTypeModal.style.display = 'none'; startTest(deck, 'ja-en'); };
+                    enToJaBtn.onclick = () => { testTypeModal.style.display = 'none'; startTest(deck, 'en-ja'); };
+                }
+            });
+            
+            function closeModal() {
+                deckModal.style.display = 'none';
+                deckNameInput.value = '';
+            }
+
+            saveDeckBtn.addEventListener('click', () => {
+                if (flashcardsData.length === 0) {
+                    showToast("There are no cards to save.");
+                    return;
+                }
+                modalMode = 'save';
+                modalTitle.textContent = 'Save Deck';
+                deckModal.style.display = 'flex';
+            });
+
+            modalCancelBtn.addEventListener('click', closeModal);
+
+            modalSaveBtn.addEventListener('click', () => {
+                const newDeckName = deckNameInput.value.trim();
+                if (!newDeckName) {
+                    showToast("Please enter a deck name.", true);
+                    return;
+                }
+                const decks = getSavedDecks();
+                if (modalMode === 'save') {
+                    decks[newDeckName] = flashcardsData;
+                } else if (modalMode === 'rename' && newDeckName !== deckToRename) {
+                    decks[newDeckName] = decks[deckToRename];
+                    delete decks[deckToRename];
+
+                    let history = getTestHistory();
+                    history.forEach(item => {
+                        if (item.deckName === deckToRename) {
+                            item.deckName = newDeckName;
+                        }
+                    });
+                    saveTestHistory(history);
+                }
+                saveDecks(decks);
+                showToast(modalMode === 'save' ? `Deck "${newDeckName}" saved!` : `Deck renamed to "${newDeckName}"!`);
+                renderAll();
+                closeModal();
+            });
+
+            // --- Drag and Drop Deck Reordering ---
+            let draggingElement = null;
+
+            function getDragAfterElement(container, y) {
+                const draggableElements = [...container.querySelectorAll('[draggable="true"]:not(.dragging)')];
+
+                return draggableElements.reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    if (offset < 0 && offset > closest.offset) {
+                        return { offset: offset, element: child };
+                    } else {
+                        return closest;
+                    }
+                }, { offset: Number.NEGATIVE_INFINITY }).element;
+            }
+
+            deckList.addEventListener('dragstart', e => {
+                if (e.target.classList.contains('deck-list-item')) {
+                    draggingElement = e.target;
+                    setTimeout(() => { draggingElement.classList.add('dragging'); }, 0);
+                }
+            });
+            deckList.addEventListener('dragend', () => {
+                if (draggingElement) {
+                    draggingElement.classList.remove('dragging');
+                    draggingElement = null;
+                }
+            });
+            deckList.addEventListener('dragover', e => {
+                e.preventDefault();
+                if (!draggingElement) return;
+                const afterElement = getDragAfterElement(deckList, e.clientY);
+                if (afterElement == null) { deckList.appendChild(draggingElement); } 
+                else { deckList.insertBefore(draggingElement, afterElement); }
+            });
+            deckList.addEventListener('drop', e => {
+                e.preventDefault();
+                if (draggingElement) {
+                    const newOrder = [...deckList.querySelectorAll('.deck-list-item')].map(item => item.dataset.deckName);
+                    saveDeckOrder(newOrder);
+                }
+            });
+
+            progressList.addEventListener('dragstart', e => {
+                if (e.target.classList.contains('progress-list-item')) {
+                    draggingElement = e.target;
+                    setTimeout(() => { draggingElement.classList.add('dragging'); }, 0);
+                }
+            });
+            progressList.addEventListener('dragend', () => {
+                if (draggingElement) {
+                    draggingElement.classList.remove('dragging');
+                    draggingElement = null;
+                }
+            });
+            progressList.addEventListener('dragover', e => {
+                e.preventDefault();
+                if (!draggingElement) return;
+                const afterElement = getDragAfterElement(progressList, e.clientY);
+                if (afterElement == null) { progressList.appendChild(draggingElement); } 
+                else { progressList.insertBefore(draggingElement, afterElement); }
+            });
+            progressList.addEventListener('drop', e => {
+                e.preventDefault();
+                if (draggingElement) {
+                    const newOrder = [...progressList.querySelectorAll('.progress-list-item')].map(item => item.dataset.deckName);
+                    saveProgressOrder(newOrder);
+                }
+            });
+
+
+            // --- TEST FEATURE LOGIC ---
+
+            function startTest(deck, testType) {
+                const shuffledDeck = [...deck].sort(() => Math.random() - 0.5);
+                testStartTime = new Date();
+                testResults = [];
+
+                testQuestions = shuffledDeck.map(card => {
+                    let question, correctAnswer, options;
+                    if (testType === 'ja-en') {
+                        question = { japanese: card.japanese, reading: card.reading, english: card.english };
+                        correctAnswer = card.english;
+                        const otherAnswers = deck.map(c => c.english).filter(answer => answer !== correctAnswer);
+                        const distractors = [...otherAnswers].sort(() => Math.random() - 0.5).slice(0, 3);
+                        options = [correctAnswer, ...distractors].sort(() => Math.random() - 0.5);
+                    } else { // en-ja
+                        question = { japanese: card.japanese, reading: card.reading, english: card.english };
+                        correctAnswer = { japanese: card.japanese, reading: card.reading };
+                        const otherAnswers = deck.filter(c => c.japanese !== card.japanese).map(c => ({ japanese: c.japanese, reading: c.reading }));
+                        const distractors = [...otherAnswers].sort(() => Math.random() - 0.5).slice(0, 3);
+                        options = [correctAnswer, ...distractors].sort(() => Math.random() - 0.5);
+                    }
+                    return { question, correctAnswer, options, testType };
+                });
+
+                currentTestQuestionIndex = 0;
+                score = 0;
+                mainContent.style.display = 'none';
+                testView.style.display = 'block';
+                displayNextQuestion();
+            }
+
+            function displayNextQuestion() {
+                if (currentTestQuestionIndex >= testQuestions.length) {
+                    showTestResults();
+                    return;
+                }
+
+                const q = testQuestions[currentTestQuestionIndex];
+                
+                if (q.testType === 'ja-en') {
+                    testQuestion.innerHTML = `
+                        <div class="text-5xl font-bold">${q.question.japanese}</div>
+                        <div class="text-2xl mt-2" style="color: var(--text-secondary-color);">${q.question.reading || ''}</div>
+                    `;
+                } else {
+                    testQuestion.innerHTML = `<div class="text-4xl font-bold">${q.question.english}</div>`;
+                }
+
+                testOptions.innerHTML = '';
+                q.options.forEach(option => {
+                    const button = document.createElement('button');
+                    button.className = 'test-option-btn';
+
+                    if (typeof option === 'object' && option !== null) {
+                        button.innerHTML = `
+                            <div class="font-bold text-2xl">${option.japanese}</div>
+                            <div class="text-base mt-1" style="color: var(--text-secondary-color);">${option.reading || ''}</div>
+                        `;
+                        button.dataset.answer = option.japanese;
+                    } else {
+                        button.textContent = option;
+                        button.dataset.answer = option;
+                    }
+                    
+                    button.addEventListener('click', () => handleAnswer(button, q));
+                    testOptions.appendChild(button);
+                });
+                testProgress.textContent = `Question ${currentTestQuestionIndex + 1} of ${testQuestions.length} | Score: ${score}`;
+            }
+
+            function handleAnswer(selectedButton, questionData) {
+                const buttons = testOptions.querySelectorAll('.test-option-btn');
+                buttons.forEach(btn => btn.disabled = true);
+
+                const correctAnswerValue = (typeof questionData.correctAnswer === 'object' && questionData.correctAnswer !== null) ? questionData.correctAnswer.japanese : questionData.correctAnswer;
+                
+                const isCorrect = selectedButton.dataset.answer === correctAnswerValue;
+                
+                testResults.push({
+                    question: questionData.question,
+                    userAnswer: selectedButton.dataset.answer,
+                    correctAnswer: questionData.correctAnswer,
+                    isCorrect: isCorrect,
+                    testType: questionData.testType
+                });
+
+                if (isCorrect) {
+                    selectedButton.classList.add('correct');
+                    score++;
+                } else {
+                    selectedButton.classList.add('incorrect');
+                    buttons.forEach(btn => {
+                        if (btn.dataset.answer === correctAnswerValue) {
+                            btn.classList.add('correct');
+                        }
+                    });
+                }
+
+                currentTestQuestionIndex++;
+                setTimeout(displayNextQuestion, 1500);
+            }
+
+            function showTestResults() {
+                const endTime = new Date();
+                const duration = Math.round((endTime - testStartTime) / 1000); // in seconds
+                
+                finalScore.textContent = `${score} / ${testQuestions.length}`;
+                timeTaken.textContent = `${duration}s`;
+
+                resultsBreakdown.innerHTML = '<h4 class="text-xl font-bold mb-2">Review:</h4>';
+                testResults.forEach(result => {
+                    const resultEl = document.createElement('div');
+                    resultEl.className = `result-item p-2 rounded ${result.isCorrect ? 'correct' : 'incorrect'}`;
+                    
+                    let questionText, answerText;
+                    if (result.testType === 'ja-en') {
+                        questionText = result.question.japanese;
+                        answerText = `Your answer: ${result.userAnswer}. Correct: ${result.correctAnswer}.`;
+                    } else {
+                        questionText = result.question.english;
+                         const correctAnswerText = `${result.correctAnswer.japanese} (${result.correctAnswer.reading})`;
+                        answerText = `Your answer: ${result.userAnswer}. Correct: ${correctAnswerText}.`;
+                    }
+                    
+                    const icon = result.isCorrect ? '✔️' : '❌';
+                    resultEl.innerHTML = `<strong>${icon} ${questionText}:</strong> ${answerText}`;
+                    resultsBreakdown.appendChild(resultEl);
+                });
+
+                testResultsModal.style.display = 'flex';
+
+                const history = getTestHistory();
+                history.push({
+                    deckName: deckForTest,
+                    score: score,
+                    total: testQuestions.length,
+                    date: new Date().toISOString(),
+                    timeTaken: duration,
+                    results: testResults
+                });
+                saveTestHistory(history);
+                updateStreak();
+                renderAll();
+            }
+
+            function exitTest() {
+                testView.style.display = 'none';
+                mainContent.style.display = 'block';
+            }
+
+            testTypeCancelBtn.addEventListener('click', () => { testTypeModal.style.display = 'none'; });
+            closeResultsBtn.addEventListener('click', () => { testResultsModal.style.display = 'none'; exitTest(); });
+            exitTestBtn.addEventListener('click', exitTest);
+
+            // --- FLASHCARD GENERATION AND DISPLAY LOGIC ---
+            imageUpload.addEventListener('change', (event) => {
+                uploadedFile = event.target.files[0];
+                if (uploadedFile) {
+                    statusMessage.textContent = `Image "${uploadedFile.name}" selected.`;
+                    statusMessage.classList.add('text-green-500');
+                }
+            });
+            
+            const emptyStarSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M11.99 4.316l1.373 4.144h4.358l-3.53 2.564 1.373 4.144L12 13.992l-3.564 2.176 1.373-4.144L6.27 8.46h4.358zM12 2l-3.09 9.29L2 12l5.91 3.71L4.69 22L12 17l7.31 5l-3.22-6.29L22 12l-6.91-2.71z"/></svg>`;
+            const filledStarSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 17.27l-4.114 2.219l.786-4.721L4.032 10.1l4.771-.692L12 5.09l3.197 4.318l4.771.692l-3.639 3.668l.786 4.721z"/></svg>`;
+
+            function showFlashcard(wordData) {
+                currentFlashcard.innerHTML = '';
+                currentFlashcard.style.display = 'block';
+                flashcardDisplay.style.display = 'flex';
+                repetitionButtons.style.display = 'flex';
+                saveDeckBtn.style.display = 'block';
+
+                const flashcard = document.createElement('div');
+                flashcard.className = 'flashcard';
+                const speakerIcon = `<button class="speaker-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></button>`;
+                
+                const front = document.createElement('div');
+                front.className = 'front';
+                front.innerHTML = `<span class="font-bold text-4xl mb-2">${wordData.japanese}</span><span class="text-lg font-normal">${wordData.reading || ''}</span>${speakerIcon}`;
+                
+                const back = document.createElement('div');
+                back.className = 'back';
+                back.innerHTML = `<span class="font-semibold text-2xl mb-4">${wordData.english || 'N/A'}</span><span class="text-sm font-normal italic px-4">${wordData.mnemonic || ''}</span>${speakerIcon}`;
+                
+                const starBtn = document.createElement('button');
+                starBtn.className = 'star-btn';
+
+                const hardWordsDeck = getSavedDecks()['Hard Words'] || [];
+                const isAlreadyStarred = hardWordsDeck.some(card => 
+                    card.japanese === wordData.japanese && 
+                    card.reading === wordData.reading && 
+                    card.english === wordData.english
+                );
+
+                if (isAlreadyStarred) {
+                    starBtn.innerHTML = filledStarSVG;
+                    starBtn.classList.add('starred');
+                } else {
+                    starBtn.innerHTML = emptyStarSVG;
+                }
+
+                back.appendChild(starBtn);
+                flashcard.appendChild(front);
+                flashcard.appendChild(back);
+                currentFlashcard.appendChild(flashcard);
+
+                starBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    let decks = getSavedDecks();
+                    let hardWordsDeck = decks['Hard Words'] || [];
+
+                    const isCurrentlyStarred = hardWordsDeck.some(card => 
+                        card.japanese === wordData.japanese && 
+                        card.reading === wordData.reading && 
+                        card.english === wordData.english
+                    );
+
+                    if (!isCurrentlyStarred) {
+                        hardWordsDeck.push(wordData);
+                        decks['Hard Words'] = hardWordsDeck;
+                        starBtn.classList.add('starred');
+                        starBtn.innerHTML = filledStarSVG;
+                        showToast(`"${wordData.japanese}" added to Hard Words deck!`);
+                    } else {
+                        decks['Hard Words'] = hardWordsDeck.filter(card => 
+                            !(card.japanese === wordData.japanese && 
+                              card.reading === wordData.reading && 
+                              card.english === wordData.english)
+                        );
+                        starBtn.classList.remove('starred');
+                        starBtn.innerHTML = emptyStarSVG;
+                        showToast(`"${wordData.japanese}" removed from Hard Words deck.`);
+                    }
+                    saveDecks(decks);
+                    renderAll();
+                });
+                
+                flashcard.querySelectorAll('.speaker-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => { e.stopPropagation(); playJapaneseAudio(wordData.reading || wordData.japanese, btn); });
+                });
+                flashcard.addEventListener('click', (e) => { if (!e.target.closest('.speaker-btn') && !e.target.closest('.star-btn')) { flashcard.classList.toggle('flipped'); } });
+            }
+
+            function showNextCard() {
+                if (currentCardIndex < flashcardsData.length) {
+                    showFlashcard(flashcardsData[currentCardIndex]);
+                    statusMessage.textContent = `Card ${currentCardIndex + 1} of ${flashcardsData.length}`;
+                } 
+            }
+            
+         // --- CORRECTED CODE ---
+
+function displayMotivationalMessage() {
+    let randomIndex;
+    // Keep picking a random index until it's different from the last one
+    do {
+        randomIndex = Math.floor(Math.random() * motivationalImages.length);
+    } while (motivationalImages.length > 1 && randomIndex === lastMotivationalImageIndex);
+    
+    lastMotivationalImageIndex = randomIndex; // Remember the new index for next time
+    const randomImage = motivationalImages[randomIndex];
+
+    motivationalImage.src = randomImage;
+    motivationalImage.style.display = 'block';
+    // ... rest of the function (the part that shows/hides the container)
+    flashcardDisplay.style.display = 'none';
+    repetitionButtons.style.display = 'none';
+    saveDeckBtn.style.display = 'none';
+    statusMessage.textContent = '';
+    motivationalMessageDisplay.style.display = 'flex';
+    setTimeout(() => {
+        motivationalMessageDisplay.classList.add('visible'); 
+    }, 10);
+}
+
+            continueStudyBtn.addEventListener('click', () => {
+                motivationalMessageDisplay.classList.remove('visible'); // Use class to hide
+                // Delay next action to allow for fade-out transition
+                setTimeout(() => {
+                    motivationalMessageDisplay.style.display = 'none'; // Hide it completely
+                    if (currentCardIndex >= flashcardsData.length) {
+                        flashcardDisplay.style.display = 'none';
+                        statusMessage.textContent = 'You have reviewed all flashcards. Great job!';
+                    } else {
+                        showNextCard();
+                    }
+                }, 400); // Match CSS transition duration
+            });
+
+            function startStudySession(deck) {
+                flashcardsData = [...deck]; // Shuffle the cards
+                currentCardIndex = 0;
+                cardsStudiedCount = 0;
+                selectDecksModal.style.display = 'none';
+                mainContent.style.display = 'block';
+                testView.style.display = 'none';
+                flashcardDisplay.style.display = 'flex'; 
+                showNextCard();
+                updateStreak();
+            }
+            
+            function handleRepetition(repetitionType) {
+                cardsStudiedCount++;
+                
+                if (repetitionType === 'repeat') {
+                    flashcardsData.splice(Math.min(flashcardsData.length, currentCardIndex + Math.floor(Math.random() * 3) + 10), 0, flashcardsData[currentCardIndex]);
+                } else if (repetitionType === 'frequently') {
+                    flashcardsData.splice(Math.min(flashcardsData.length, currentCardIndex + Math.floor(Math.random() * 3) + 4), 0, flashcardsData[currentCardIndex]);
+                }
+                
+                currentCardIndex++;
+                
+                if (currentCardIndex >= flashcardsData.length || (cardsStudiedCount % 10 === 0 && cardsStudiedCount > 0)) {
+                    displayMotivationalMessage();
+                } else {
+                    showNextCard();
+                }
+            }
+
+            dontRepeatBtn.addEventListener('click', () => handleRepetition('dont-repeat'));
+            repeatBtn.addEventListener('click', () => handleRepetition('repeat'));
+            repeatFrequentlyBtn.addEventListener('click', () => handleRepetition('frequently'));
+
+            generateBtn.addEventListener('click', async () => {
+                if (!uploadedFile) {
+                    statusMessage.textContent = 'Please select an image first.';
+                    statusMessage.classList.add('text-red-500');
+                    return;
+                }
+                statusMessage.textContent = 'Analyzing image...';
+                loadingSpinner.style.display = 'block';
+                flashcardDisplay.style.display = 'none';
+                try {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(uploadedFile);
+                    reader.onload = async () => {
+                        const base64Data = reader.result.split(',')[1];
+                        const prompt = `Act as an expert Japanese OCR, translator, and a creative memory coach. Analyze the text in the image. For each word or phrase, provide: 1. The original Japanese writing (including Kanji). 2. Its reading in Hiragana (furigana). 3. Its English translation. 4. A short, creative, and memorable mnemonic to help remember the word. This mnemonic should be in a mix of simple English and Hindi (Hinglish), connecting the Japanese sound to a memorable concept. Return the result as a JSON array of objects. Each object must have "japanese", "reading", "english", and "mnemonic" properties.`;
+                        const payload = { contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: uploadedFile.type, data: base64Data } }] }], generationConfig: { responseMimeType: "application/json", responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { "japanese": { "type": "STRING" }, "reading": { "type": "STRING" }, "english": { "type": "STRING" }, "mnemonic": { "type": "STRING" } }, required: ["japanese", "reading", "english", "mnemonic"] } } } };
+                        const localServerUrl = 'http://localhost:3000/api/generate';
+
+// 2. Send the payload to your server (Your server will add the key)
+const response = await fetch(localServerUrl, { 
+    method: 'POST', 
+    headers: { 'Content-Type': 'application/json' }, 
+    body: JSON.stringify(payload) 
+});
+                        if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+                        const result = await response.json();
+                        if (result.candidates?.[0]?.content?.parts?.[0]) {
+                            const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
+                            if (parsedJson?.length > 0) {
+                                flashcardsData = parsedJson;
+                                currentCardIndex = 0;
+                                showNextCard();
+                                flashcardDisplay.style.display = 'flex';
+                                statusMessage.textContent = 'Flashcards generated!';
+                                statusMessage.classList.remove('text-red-500');
+                            } else { statusMessage.textContent = 'No words found in the image.'; }
+                        } else { statusMessage.textContent = 'API response issue.'; }
+                    };
+                    reader.onerror = () => { statusMessage.textContent = 'Error reading file.'; };
+                } catch (error) {
+                    console.error('Error generating flashcards:', error);
+                    statusMessage.textContent = 'An error occurred.';
+                } finally {
+                    loadingSpinner.style.display = 'none';
+                }
+            });
+
+            // --- PWA Installation & Service Worker ---
+            let deferredPrompt;
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                installBtn.style.display = 'flex';
+            });
+
+            installBtn.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    installBtn.style.display = 'none';
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log(`User response to the install prompt: ${outcome}`);
+                    deferredPrompt = null;
+                }
+            });
+
+            window.addEventListener('appinstalled', () => {
+                deferredPrompt = null;
+                console.log('PWA was installed');
+                showToast('App installed successfully!');
+            });
+
+
+            // --- Initial Render ---
+            checkAndResetStreak();
+            renderAll();
+            getJapaneseVoice(); // Pre-load the voice
+        });
+    </script>
+</body>
+</html>
+
