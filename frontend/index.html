@@ -1539,7 +1539,7 @@ function displayMotivationalMessage() {
                         const base64Data = reader.result.split(',')[1];
                         const prompt = `Act as an expert Japanese OCR, translator, and a creative memory coach. Analyze the text in the image. For each word or phrase, provide: 1. The original Japanese writing (including Kanji). 2. Its reading in Hiragana (furigana). 3. Its English translation. 4. A short, creative, and memorable mnemonic to help remember the word. This mnemonic should be in a mix of simple English and Hindi (Hinglish), connecting the Japanese sound to a memorable concept. Return the result as a JSON array of objects. Each object must have "japanese", "reading", "english", and "mnemonic" properties.`;
                         const payload = { contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: uploadedFile.type, data: base64Data } }] }], generationConfig: { responseMimeType: "application/json", responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { "japanese": { "type": "STRING" }, "reading": { "type": "STRING" }, "english": { "type": "STRING" }, "mnemonic": { "type": "STRING" } }, required: ["japanese", "reading", "english", "mnemonic"] } } } };
-                        const localServerUrl = 'http://localhost:3000/api/generate';
+                        const localServerUrl = 'https://koicards-api.onrender.com/api/generate';
 
 // 2. Send the payload to your server (Your server will add the key)
 const response = await fetch(localServerUrl, { 
