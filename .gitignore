@@ -1,0 +1,14 @@
+.env
+node_modules/
+
+# Unused personal/test assets not referenced by the app
+frontend/goat.jpg
+frontend/goat2.jpg
+frontend/img2.jpg
+frontend/img3.jpg
+frontend/img4.jpg
+frontend/img5.jpg
+frontend/me.png
+frontend/ngu.jpg
+frontend/whiplash.jpg
+frontend/Preliminary Lesson.pdf
