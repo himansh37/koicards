@@ -330,7 +330,9 @@
         }
 
         #install-app-btn {
-            position: fixed;
+            /* absolute (not fixed) so it sits near the top and scrolls away
+               with the page instead of floating over content permanently */
+            position: absolute;
             top: 1rem;
             background-color: var(--container-bg-color);
             border: none;
@@ -348,8 +350,7 @@
 
 
         #install-app-btn {
-            right: 4rem;
-            /* Position next to theme toggle */
+            right: 1rem;
         }
 
         #install-app-btn svg {
