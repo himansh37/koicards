@@ -1154,7 +1154,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+            if (!response.ok) {
+                if (response.status === 429) {
+                    const errorBody = await response.json().catch(() => null);
+                    statusMessage.textContent = errorBody?.error || "You've used today's free limit. Please try again tomorrow.";
+                    statusMessage.classList.add('text-red-500');
+                    return; // finally block below still runs and resets the loading state
+                }
+                throw new Error(`API error: ${response.statusText}`);
+            }
             const result = await response.json();
             if (result.candidates?.[0]?.content?.parts?.[0]) {
                 const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
@@ -1209,8 +1217,34 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('App installed successfully!');
     });
 
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js')
+                .catch((err) => console.error('Service worker registration failed:', err));
+        });
+    }
+
+
+    // --- Demo Deck for First-Time Visitors ---
+    function seedDemoDeckForFirstTimeVisitors() {
+        const seededKey = 'koicards_demo_seeded';
+        if (localStorage.getItem(seededKey)) return; // never re-seed once a visitor has been here before
+        localStorage.setItem(seededKey, 'true');
+
+        if (Object.keys(deckManager.getDecks()).length > 0) return; // don't clobber an existing user's decks
+
+        const demoCards = [
+            { japanese: 'こんにちは', reading: 'こんにちは', english: 'Hello / Good afternoon', mnemonic: "Kon-nichi-wa sounds like 'Come-nichi-va' — aaja bhai!" },
+            { japanese: 'ありがとう', reading: 'ありがとう', english: 'Thank you', mnemonic: "Ari-ga-tou — 'Ari gaya toh' thank karo!" },
+            { japanese: 'すみません', reading: 'すみません', english: 'Excuse me / Sorry', mnemonic: "Sumi-ma-sen — 'Summy miss sen' — sorry yaar!" },
+            { japanese: 'おはよう', reading: 'おはよう', english: 'Good morning', mnemonic: 'Ohio jaisa lagta hai — subah ka Ohio!' },
+            { japanese: 'さようなら', reading: 'さようなら', english: 'Goodbye', mnemonic: "Sayonara — 'So long yaar' — bye bye!" }
+        ];
+        deckManager.saveDeck('Japanese Greetings', demoCards);
+    }
 
     // --- Initial Render ---
+    seedDemoDeckForFirstTimeVisitors();
     deckManager.checkAndResetStreak();
     renderAll();
     getJapaneseVoice(); // Pre-load the voice
