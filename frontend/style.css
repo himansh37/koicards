@@ -355,7 +355,8 @@
         #install-app-btn svg {
             width: 20px;
             height: 20px;
-            fill: var(--text-primary-color);
+            fill: none;
+            stroke: var(--text-primary-color);
         }
 
         #test-view {
