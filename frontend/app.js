@@ -3,6 +3,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Element Selectors ---
     const imageUpload = document.getElementById('imageUpload');
     const generateBtn = document.getElementById('generateBtn');
+    const mnemonicLangSelect = document.getElementById('mnemonicLangSelect');
+
+    // --- MNEMONIC LANGUAGE PREFERENCE ---
+    const MNEMONIC_LANG_PHRASES = {
+        hinglish: 'mnemonic in Hinglish (Hindi + English mix)',
+        english: 'mnemonic in simple English only',
+        chinese: 'mnemonic using Mandarin Chinese words or sounds',
+        korean: 'mnemonic using Korean words or sounds',
+        indonesian: 'mnemonic using Bahasa Indonesia words',
+        portuguese: 'mnemonic using Brazilian Portuguese words',
+        german: 'mnemonic using German words or sounds',
+        spanish: 'mnemonic using Mexican Spanish words',
+        taiwanese: 'mnemonic using Taiwanese Mandarin',
+        vietnamese: 'mnemonic using Vietnamese words or sounds'
+    };
+
+    if (mnemonicLangSelect) {
+        const savedMnemonicLang = localStorage.getItem('mnemonicLang');
+        if (savedMnemonicLang && MNEMONIC_LANG_PHRASES[savedMnemonicLang]) {
+            mnemonicLangSelect.value = savedMnemonicLang;
+        }
+        mnemonicLangSelect.addEventListener('change', () => {
+            localStorage.setItem('mnemonicLang', mnemonicLangSelect.value);
+        });
+    }
     const flashcardDisplay = document.getElementById('flashcard-display');
     const currentFlashcard = document.getElementById('current-flashcard');
     const loadingSpinner = document.getElementById('loading');
@@ -230,17 +255,32 @@ document.addEventListener('DOMContentLoaded', () => {
             glyph.textContent = kanjiForDeck(deckName);
             titleWrap.appendChild(glyph);
 
+            const textWrap = document.createElement('span');
+            textWrap.className = 'flex flex-col items-start';
+            textWrap.style.minWidth = '0';
+
             const titleSpan = document.createElement('span');
             titleSpan.className = 'font-semibold';
             titleSpan.style.color = 'var(--text-primary-color)';
-            titleSpan.textContent = `${deckName} (${deck.length} cards)`;
-            titleWrap.appendChild(titleSpan);
+            titleSpan.textContent = deckName;
+            textWrap.appendChild(titleSpan);
+
+            const metaSpan = document.createElement('span');
+            metaSpan.style.color = 'var(--text-secondary-color)';
+            metaSpan.style.fontSize = '0.8rem';
+            metaSpan.textContent = `${deck.length} card${deck.length === 1 ? '' : 's'}`;
+            textWrap.appendChild(metaSpan);
+
+            titleWrap.appendChild(textWrap);
 
             deckItem.appendChild(titleWrap);
 
             const btnContainer = document.createElement('div');
             // Responsive: Flex row on desktop, Grid on mobile
-            btnContainer.className = 'grid grid-cols-2 gap-2 w-full md:w-auto md:flex md:space-x-2 mt-4 md:mt-0';
+            // Mobile: one compact row (Test/Load/Rename + icon-only Delete via CSS).
+            // Desktop (md:flex) is unaffected — grid-template-columns has no
+            // effect once display switches to flex.
+            btnContainer.className = 'grid grid-cols-[1.3fr_1fr_1fr_0.6fr] gap-2 w-full md:w-auto md:flex md:space-x-2 mt-4 md:mt-0';
 
             const createBtn = (text, classes, label) => {
                 const btn = document.createElement('button');
@@ -369,18 +409,20 @@ document.addEventListener('DOMContentLoaded', () => {
             card.dataset.deckName = deckName;
 
             card.innerHTML = `
-                <h3>${deckName}</h3>
                 <div class="progress-ring">
-                    <svg class="progress-ring__svg" width="120" height="120">
+                    <svg class="progress-ring__svg" width="120" height="120" viewBox="0 0 120 120">
                         <circle class="progress-ring__background" stroke="rgba(255,255,255,0.1)" stroke-width="8" fill="transparent" r="${radius}" cx="60" cy="60"/>
-                        <circle class="progress-ring__circle" stroke="${color}" stroke-width="8" fill="transparent" r="${radius}" cx="60" cy="60" 
+                        <circle class="progress-ring__circle" stroke="${color}" stroke-width="8" fill="transparent" r="${radius}" cx="60" cy="60"
                                 style="stroke-dasharray: ${circumference} ${circumference}; stroke-dashoffset: ${offset};"/>
                     </svg>
                     <span class="progress-score">${averageScore}</span>
                 </div>
-                <div class="progress-stats">
-                    <span>Tests: ${deckHistory.length}</span>
-                    <span style="color: ${color}">Best: ${bestScore}%</span>
+                <div class="progress-card-info">
+                    <h3>${deckName}</h3>
+                    <div class="progress-stats">
+                        <span>Tests: ${deckHistory.length}</span>
+                        <span style="color: ${color}">Best: ${bestScore}%</span>
+                    </div>
                 </div>
             `;
 
@@ -1162,7 +1204,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.readAsDataURL(state.uploadedFile);
             });
 
-            const prompt = `Act as an expert Japanese OCR, translator, and a creative memory coach. Analyze the text in the image. For each word or phrase, provide: 1. The original Japanese writing (including Kanji). 2. Its reading in Hiragana (furigana). 3. Its English translation. 4. A short, creative, and memorable mnemonic to help remember the word. This mnemonic should be in a mix of simple English and Hindi (Hinglish), connecting the Japanese sound to a memorable concept. Return the result as a JSON array of objects. Each object must have "japanese", "reading", "english", and "mnemonic" properties.`;
+            const mnemonicPhrase = MNEMONIC_LANG_PHRASES[mnemonicLangSelect?.value] || MNEMONIC_LANG_PHRASES.english;
+            const prompt = `Act as an expert Japanese OCR, translator, and a creative memory coach. Analyze the text in the image. For each word or phrase, provide: 1. The original Japanese writing (including Kanji). 2. Its reading in Hiragana (furigana). 3. Its English translation. 4. A short, creative, and memorable ${mnemonicPhrase}, connecting the Japanese sound to a memorable concept. Return the result as a JSON array of objects. Each object must have "japanese", "reading", "english", and "mnemonic" properties.`;
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: state.uploadedFile.type, data: base64Data } }] }], generationConfig: { responseMimeType: "application/json", responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { "japanese": { "type": "STRING" }, "reading": { "type": "STRING" }, "english": { "type": "STRING" }, "mnemonic": { "type": "STRING" } }, required: ["japanese", "reading", "english", "mnemonic"] } } } };
             const localServerUrl = 'https://koicards-api.onrender.com/api/generate';
 
@@ -1245,18 +1288,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Demo Deck for First-Time Visitors ---
     function seedDemoDeckForFirstTimeVisitors() {
-        const seededKey = 'koicards_demo_seeded';
+        // v2: bumped so anyone who already got the old Hinglish demo cards
+        // (before mnemonics were switched to English-only) gets reseeded once
+        // with the corrected deck, instead of keeping the stale text forever.
+        const seededKey = 'koicards_demo_seeded_v2';
         if (localStorage.getItem(seededKey)) return; // never re-seed once a visitor has been here before
+
+        const hadOldSeed = !!localStorage.getItem('koicards_demo_seeded');
         localStorage.setItem(seededKey, 'true');
 
-        if (Object.keys(deckManager.getDecks()).length > 0) return; // don't clobber an existing user's decks
+        const decks = deckManager.getDecks();
+        // If the old (Hinglish) auto-seeded deck is still sitting there, we
+        // overwrite just that one deck below — even if the visitor has since
+        // added other real decks — rather than skipping the fix entirely.
+        const hasStaleDemoDeck = hadOldSeed && !!decks['Japanese Greetings'];
+        if (Object.keys(decks).length > 0 && !hasStaleDemoDeck) return; // don't clobber an existing user's decks
 
         const demoCards = [
-            { japanese: 'こんにちは', reading: 'こんにちは', english: 'Hello / Good afternoon', mnemonic: "Kon-nichi-wa sounds like 'Come-nichi-va' — aaja bhai!" },
-            { japanese: 'ありがとう', reading: 'ありがとう', english: 'Thank you', mnemonic: "Ari-ga-tou — 'Ari gaya toh' thank karo!" },
-            { japanese: 'すみません', reading: 'すみません', english: 'Excuse me / Sorry', mnemonic: "Sumi-ma-sen — 'Summy miss sen' — sorry yaar!" },
-            { japanese: 'おはよう', reading: 'おはよう', english: 'Good morning', mnemonic: 'Ohio jaisa lagta hai — subah ka Ohio!' },
-            { japanese: 'さようなら', reading: 'さようなら', english: 'Goodbye', mnemonic: "Sayonara — 'So long yaar' — bye bye!" }
+            { japanese: 'こんにちは', reading: 'こんにちは', english: 'Hello / Good afternoon', mnemonic: "Sounds like 'cone-ee-chee-wah' — imagine handing someone an ice cream cone as a friendly hello." },
+            { japanese: 'ありがとう', reading: 'ありがとう', english: 'Thank you', mnemonic: "Sounds like 'ah-ree-gah-toh' — picture a gator tipping its hat to say thanks." },
+            { japanese: 'すみません', reading: 'すみません', english: 'Excuse me / Sorry', mnemonic: "Sounds like 'soo-mee-mah-sen' — a submarine bumps into you and quietly apologizes." },
+            { japanese: 'おはよう', reading: 'おはよう', english: 'Good morning', mnemonic: "Sounds like 'oh-hi-yoh' — like blurting out 'Oh, hi yo!' the second you wake up." },
+            { japanese: 'さようなら', reading: 'さようなら', english: 'Goodbye', mnemonic: "Sounds like 'sigh-oh-nah-rah' — you let out a sigh as you wave goodbye." }
         ];
         deckManager.saveDeck('Japanese Greetings', demoCards);
     }

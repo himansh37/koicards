@@ -245,6 +245,16 @@
             font-size: 15px;
         }
 
+        /* Chromium does honor color/background on <option>, so the open
+           popup list can actually match the app's dark theme instead of
+           falling back to native white. (Some other browsers ignore this
+           and always render a native white popup — no CSS workaround for
+           that; it's just how those engines draw <select> lists.) */
+        #mnemonicLangSelect option {
+            color: var(--text-primary-color);
+            background-color: var(--container-bg-color);
+        }
+
         .progress-visual {
             display: flex;
             align-items: center;
@@ -627,6 +637,29 @@
             .container {
                 padding: 1.25rem;
             }
+
+            /* Bigger touch targets for deck action buttons on mobile */
+            .deck-list-item button {
+                padding-top: 0.65rem;
+                padding-bottom: 0.65rem;
+                padding-left: 0.4rem;
+                padding-right: 0.4rem;
+                min-height: 44px;
+                font-size: 0.8rem;
+            }
+
+            /* Delete becomes icon-only on mobile so all four actions fit on
+               one line — desktop keeps the text button untouched. Selector
+               is scoped to beat ".deck-list-item button" on specificity. */
+            .deck-list-item .delete-deck-btn {
+                font-size: 0;
+            }
+
+            .deck-list-item .delete-deck-btn::before {
+                content: '🗑️';
+                font-size: 1rem;
+            }
+
         }
 
         /* --- REDESIGNED PROGRESS VIEW --- */
@@ -659,6 +692,11 @@
         }
 
         .progress-card h3 {
+            /* explicit order: the markup now puts the ring before the
+               name+stats wrapper (needed for the mobile row layout below),
+               so order restores the original name-ring-stats visual
+               sequence on desktop regardless of DOM position */
+            order: 1;
             font-size: 1.25rem;
             font-weight: 700;
             margin-bottom: 1rem;
@@ -666,8 +704,16 @@
             z-index: 1;
         }
 
+        /* On desktop this wrapper is invisible to layout so the card keeps its
+           current vertical look; the mobile media query below turns it into a
+           real column so name+stats can sit beside the ring in a row. */
+        .progress-card-info {
+            display: contents;
+        }
+
         /* Circular Progress */
         .progress-ring {
+            order: 2;
             position: relative;
             width: 120px;
             height: 120px;
@@ -704,6 +750,7 @@
         }
 
         .progress-stats {
+            order: 3;
             display: flex;
             justify-content: space-between;
             width: 100%;
@@ -712,4 +759,72 @@
             margin-top: 0.5rem;
             padding-top: 0.75rem;
             border-top: 1px solid var(--glass-border);
+        }
+
+        /* Progress cards become compact horizontal rows on mobile instead of
+           tall vertical cards — ring on the left, name/stats stacked on the
+           right, so more of them fit on screen at once.
+           NOTE: this media query must stay physically AFTER the base
+           .progress-card rules above — CSS gives equal-specificity rules
+           the win to whichever comes later in the file, media query or not,
+           so placing this block earlier (as it originally was) silently
+           made it dead on every mobile width, not just one device. */
+        @media (max-width: 768px) {
+            #progress-list {
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+
+            .progress-card {
+                flex-direction: row;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 1rem;
+                padding: 1rem;
+                text-align: left;
+            }
+
+            .progress-ring {
+                order: 1;
+                width: 72px;
+                height: 72px;
+                margin-bottom: 0;
+                flex: none;
+            }
+
+            .progress-ring__svg {
+                width: 100%;
+                height: 100%;
+            }
+
+            .progress-score {
+                font-size: 1.05rem;
+            }
+
+            .progress-card-info {
+                order: 2;
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+                flex: 1;
+                min-width: 0;
+            }
+
+            .progress-card h3 {
+                margin-bottom: 0;
+                font-size: 1rem;
+                text-align: left;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .progress-stats {
+                width: auto;
+                justify-content: flex-start;
+                gap: 0.75rem;
+                margin-top: 0;
+                padding-top: 0;
+                border-top: none;
+            }
         }

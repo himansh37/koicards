@@ -79,6 +79,23 @@
                 </button>
             </div>
 
+            <div class="flex flex-col items-center justify-center gap-2 mt-6">
+                <label for="mnemonicLangSelect" class="text-sm font-medium" style="color: var(--text-secondary-color);">Mnemonic style:</label>
+                <select id="mnemonicLangSelect"
+                    class="bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-md rounded-xl px-4 py-2 text-sm font-medium text-white cursor-pointer transition-all duration-300">
+                    <option value="english" selected>🇺🇸 English only (default)</option>
+                    <option value="hinglish">🇮🇳 Hinglish</option>
+                    <option value="chinese">🇨🇳 Chinese hints</option>
+                    <option value="korean">🇰🇷 Korean hints</option>
+                    <option value="indonesian">🇮🇩 Indonesian hints</option>
+                    <option value="portuguese">🇧🇷 Portuguese hints</option>
+                    <option value="german">🇩🇪 German hints</option>
+                    <option value="spanish">🇲🇽 Spanish hints</option>
+                    <option value="taiwanese">🇹🇼 Taiwanese hints</option>
+                    <option value="vietnamese">🇻🇳 Vietnamese hints</option>
+                </select>
+            </div>
+
             <div id="statusMessage" class="text-sm mt-4" style="color: var(--text-secondary-color);"></div>
             <div id="loading" class="loading-spinner"></div>
         </div>
