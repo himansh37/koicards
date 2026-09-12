@@ -231,6 +231,20 @@
             opacity: 0.4;
         }
 
+        .deck-glyph {
+            flex: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: rgba(168, 199, 250, 0.15);
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
         .progress-visual {
             display: flex;
             align-items: center;

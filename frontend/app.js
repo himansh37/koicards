@@ -205,6 +205,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const endIndex = startIndex + state.itemsPerPage;
         const paginatedDecks = deckOrder.slice(startIndex, endIndex);
 
+        const deckKanjiPool = ['語', '学', '字', '本', '日', '新', '力', '心', '美', '和', '花', '空', '音', '夢'];
+        const kanjiForDeck = (name) => {
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+            return deckKanjiPool[hash % deckKanjiPool.length];
+        };
+
         paginatedDecks.forEach(deckName => {
             const deck = decks[deckName];
             if (!deck) return;
@@ -214,11 +221,22 @@ document.addEventListener('DOMContentLoaded', () => {
             deckItem.setAttribute('draggable', 'true');
             deckItem.dataset.deckName = deckName;
 
+            const titleWrap = document.createElement('span');
+            titleWrap.className = 'flex items-center gap-3';
+
+            const glyph = document.createElement('span');
+            glyph.className = 'deck-glyph';
+            glyph.setAttribute('aria-hidden', 'true');
+            glyph.textContent = kanjiForDeck(deckName);
+            titleWrap.appendChild(glyph);
+
             const titleSpan = document.createElement('span');
             titleSpan.className = 'font-semibold';
             titleSpan.style.color = 'var(--text-primary-color)';
             titleSpan.textContent = `${deckName} (${deck.length} cards)`;
-            deckItem.appendChild(titleSpan);
+            titleWrap.appendChild(titleSpan);
+
+            deckItem.appendChild(titleWrap);
 
             const btnContainer = document.createElement('div');
             // Responsive: Flex row on desktop, Grid on mobile
@@ -829,7 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsBreakdown.innerHTML = ''; // Clear previous results
         const heading = document.createElement('h4');
         heading.className = 'text-xl font-bold mb-2';
-        heading.textContent = 'Review:';
+        heading.textContent = '📝 Review:';
         resultsBreakdown.appendChild(heading);
 
         state.testResults.forEach(result => {
