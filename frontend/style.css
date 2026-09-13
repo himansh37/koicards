@@ -384,7 +384,7 @@
 
 
         #install-app-btn {
-            right: 1rem;
+            right: 4rem;
         }
 
         /* Positions the PDF link in the same top-right cluster as the
@@ -393,7 +393,7 @@
         #vocab-pdf-btn {
             position: absolute;
             top: 1rem;
-            right: 4rem;
+            right: 1rem;
             z-index: 2001;
         }
 
