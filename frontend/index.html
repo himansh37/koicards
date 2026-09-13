@@ -171,6 +171,15 @@
                     class="w-full md:w-auto px-6 py-4 bg-white/5 hover:bg-white/10 text-gray-200 border border-white/10 rounded-2xl transition-all hover:scale-105 backdrop-blur-sm font-semibold shadow-lg shadow-black/20 text-lg">Select
                     Decks for Study</button>
             </div>
+            <div style="margin-bottom: 12px;">
+                <input type="text" id="deck-search" placeholder="🔍 Search decks..."
+                       style="width:100%; padding:10px 14px; border-radius:12px;
+                              background:rgba(255,255,255,0.05);
+                              border:1px solid rgba(255,255,255,0.1);
+                              color:white; font-size:0.9rem; outline:none;
+                              transition: border 0.2s;"
+                       oninput="filterDecks(this.value)">
+            </div>
             <div id="deck-list" class="space-y-2"></div>
         </div>
 

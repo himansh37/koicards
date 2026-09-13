@@ -1,4 +1,16 @@
 
+// Global (not inside the DOMContentLoaded closure below) because the search
+// input's inline oninput="filterDecks(this.value)" attribute runs in global
+// scope and can't reach a function declared inside that closure.
+function filterDecks(query) {
+    const items = document.querySelectorAll('.deck-list-item');
+    const q = query.toLowerCase().trim();
+    items.forEach(item => {
+        const name = item.dataset.deckName.toLowerCase();
+        item.style.display = q === '' || name.includes(q) ? '' : 'none';
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- Element Selectors ---
     const imageUpload = document.getElementById('imageUpload');
@@ -87,6 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lastMotivationalQuoteIndex: -1,
         flashcardsData: [],
         currentCardIndex: 0,
+        currentDeckName: null, // name of the saved deck currently being studied, if any
         modalMode: 'save',
         deckToRename: '',
         testQuestions: [],
@@ -329,7 +342,20 @@ document.addEventListener('DOMContentLoaded', () => {
             return btn;
         };
 
+        // A search filter only affects which items on the CURRENT rendered
+        // page are visible — it doesn't span pages. Changing pages while a
+        // search is active would leave stale, confusing filter results, so
+        // clear it first.
+        const clearDeckSearchIfActive = () => {
+            if (container !== deckList) return;
+            const searchInput = document.getElementById('deck-search');
+            if (searchInput && searchInput.value) {
+                searchInput.value = '';
+            }
+        };
+
         controlsContainer.appendChild(createBtn('Previous', state.currentPage === 1, () => {
+            clearDeckSearchIfActive();
             state.currentPage--;
             renderAll();
         }));
@@ -340,6 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
         controlsContainer.appendChild(pageInfo);
 
         controlsContainer.appendChild(createBtn('Next', state.currentPage === totalPages, () => {
+            clearDeckSearchIfActive();
             state.currentPage++;
             renderAll();
         }));
@@ -590,7 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
             deckManager.setStreak(1);
             renderStreak();
 
-            startStudySession(decks[deckName]);
+            startStudySession(decks[deckName], deckName);
         }
 
         if (e.target.classList.contains('rename-deck-btn')) {
@@ -674,12 +701,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!overwrite) return;
             }
             deckManager.saveDeck(newDeckName, state.flashcardsData);
+            // Card edits during this study session can now persist to it.
+            state.currentDeckName = newDeckName;
         } else if (state.modalMode === 'rename' && newDeckName !== state.deckToRename) {
             try {
                 deckManager.renameDeck(state.deckToRename, newDeckName);
             } catch (error) {
                 showToast(error.message);
                 return;
+            }
+            if (state.currentDeckName === state.deckToRename) {
+                state.currentDeckName = newDeckName;
             }
         }
         showToast(state.modalMode === 'save' ? `Deck "${newDeckName}" saved!` : `Deck renamed to "${newDeckName}"!`);
@@ -1008,6 +1040,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         back.insertAdjacentHTML('beforeend', speakerIcon);
 
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-card-btn';
+        editBtn.title = 'Edit this card';
+        editBtn.setAttribute('aria-label', 'Edit this card');
+        editBtn.style.cssText = 'position:absolute; top:12px; left:12px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:rgba(255,255,255,0.6); border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s;';
+        editBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+        back.appendChild(editBtn);
+
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showCardEditForm(wordData, back);
+        });
+
         const starBtn = document.createElement('button');
         starBtn.className = 'star-btn';
         starBtn.setAttribute('aria-label', 'Toggle star');
@@ -1065,16 +1110,96 @@ document.addEventListener('DOMContentLoaded', () => {
         flashcard.querySelectorAll('.speaker-btn').forEach(btn => {
             btn.addEventListener('click', (e) => { e.stopPropagation(); playJapaneseAudio(wordData.reading || wordData.japanese, btn); });
         });
-        flashcard.addEventListener('click', (e) => { if (!e.target.closest('.speaker-btn') && !e.target.closest('.star-btn')) { flashcard.classList.toggle('flipped'); } });
+        const isInteractiveTarget = (target) =>
+            target.closest('.speaker-btn') || target.closest('.star-btn') ||
+            target.closest('.edit-card-btn') || target.closest('.card-edit-form');
+
+        flashcard.addEventListener('click', (e) => { if (!isInteractiveTarget(e.target)) { flashcard.classList.toggle('flipped'); } });
 
         // Keyboard accessibility
         flashcard.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
+                if (isInteractiveTarget(e.target)) return; // let the form/buttons handle their own keys
                 e.preventDefault();
-                if (!e.target.closest('.speaker-btn') && !e.target.closest('.star-btn')) {
-                    flashcard.classList.toggle('flipped');
-                }
+                flashcard.classList.toggle('flipped');
             }
+        });
+    }
+
+    // Replaces the back card's content with an inline edit form for the
+    // current card. Save persists to state.flashcardsData (and, if this
+    // session is studying a saved deck, to localStorage too); both Save
+    // and Cancel end by simply re-rendering the current card fresh.
+    function showCardEditForm(wordData, backEl) {
+        backEl.innerHTML = '';
+
+        const form = document.createElement('div');
+        form.className = 'card-edit-form';
+        form.addEventListener('click', (e) => e.stopPropagation());
+
+        const addField = (labelText, value, multiline) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'card-edit-field';
+
+            const label = document.createElement('label');
+            label.className = 'card-edit-label';
+            label.textContent = labelText;
+            wrap.appendChild(label);
+
+            const input = document.createElement(multiline ? 'textarea' : 'input');
+            if (!multiline) input.type = 'text';
+            input.className = 'card-edit-input';
+            input.value = value || '';
+            wrap.appendChild(input);
+
+            form.appendChild(wrap);
+            return input;
+        };
+
+        const japaneseInput = addField('Japanese', wordData.japanese, false);
+        const readingInput = addField('Reading', wordData.reading, false);
+        const englishInput = addField('English', wordData.english, false);
+        const mnemonicInput = addField('Mnemonic', wordData.mnemonic, true);
+
+        const buttonRow = document.createElement('div');
+        buttonRow.className = 'card-edit-buttons';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'card-edit-cancel-btn';
+        cancelBtn.textContent = 'Cancel';
+        buttonRow.appendChild(cancelBtn);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'card-edit-save-btn';
+        saveBtn.textContent = 'Save';
+        buttonRow.appendChild(saveBtn);
+
+        form.appendChild(buttonRow);
+        backEl.appendChild(form);
+        japaneseInput.focus();
+
+        cancelBtn.addEventListener('click', () => showNextCard());
+
+        saveBtn.addEventListener('click', () => {
+            const japanese = japaneseInput.value.trim();
+            if (!japanese) {
+                showToast('Japanese text is required.');
+                return;
+            }
+            state.flashcardsData[state.currentCardIndex] = {
+                ...wordData,
+                japanese,
+                reading: readingInput.value.trim(),
+                english: englishInput.value.trim(),
+                mnemonic: mnemonicInput.value.trim()
+            };
+            if (state.currentDeckName) {
+                deckManager.saveDeck(state.currentDeckName, state.flashcardsData);
+            }
+            showNextCard();
+            showToast('Card updated!');
         });
     }
 
@@ -1147,9 +1272,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    function startStudySession(deck) {
+    function startStudySession(deck, deckName) {
         state.flashcardsData = [...deck]; // Shuffle the cards
         state.currentCardIndex = 0;
+        // Only a single named deck (not a combined multi-deck study session)
+        // can have card edits persisted back to localStorage.
+        state.currentDeckName = deckName || null;
         state.cardsStudiedCount = 0;
         selectDecksModal.style.display = 'none';
         mainContent.style.display = 'block';
@@ -1230,6 +1358,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (parsedJson?.length > 0) {
                     state.flashcardsData = parsedJson;
                     state.currentCardIndex = 0;
+                    state.currentDeckName = null; // freshly generated, not yet saved
 
                     // USER REQUEST: Reset streak to 1 when generating flashcards from a new image
                     deckManager.setStreak(1);
