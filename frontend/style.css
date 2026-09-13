@@ -379,6 +379,20 @@
             right: 1rem;
         }
 
+        /* Positions the PDF link in the same top-right cluster as the
+           install button (which supplies its own background/border/size
+           via inline style, so only placement is set here). */
+        #vocab-pdf-btn {
+            position: absolute;
+            top: 1rem;
+            right: 4rem;
+            z-index: 2001;
+        }
+
+        #vocab-pdf-btn:hover {
+            background: rgba(255, 255, 255, 0.16) !important;
+        }
+
         #install-app-btn svg {
             width: 20px;
             height: 20px;

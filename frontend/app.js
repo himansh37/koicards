@@ -6,22 +6,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const mnemonicLangSelect = document.getElementById('mnemonicLangSelect');
 
     // --- MNEMONIC LANGUAGE PREFERENCE ---
-    const MNEMONIC_LANG_PHRASES = {
-        hinglish: 'mnemonic in Hinglish (Hindi + English mix)',
-        english: 'mnemonic in simple English only',
-        chinese: 'mnemonic using Mandarin Chinese words or sounds',
-        korean: 'mnemonic using Korean words or sounds',
-        indonesian: 'mnemonic using Bahasa Indonesia words',
-        portuguese: 'mnemonic using Brazilian Portuguese words',
-        german: 'mnemonic using German words or sounds',
-        spanish: 'mnemonic using Mexican Spanish words',
-        taiwanese: 'mnemonic using Taiwanese Mandarin',
-        vietnamese: 'mnemonic using Vietnamese words or sounds'
+    const mnemonicStyles = {
+        hinglish: "Hinglish (Hindi + English mix) — example: 'Kono sounds like KONO — yaad karo!'",
+        english: "English only — write the entire mnemonic in English only, no other language",
+        chinese: "Mandarin Chinese only — write the entire mnemonic completely in Mandarin Chinese (简体中文), no English",
+        korean: "Korean only — write the entire mnemonic completely in Korean (한국어), no English",
+        indonesian: "Bahasa Indonesia only — write the entire mnemonic completely in Bahasa Indonesia, no English",
+        portuguese: "Brazilian Portuguese only — write the entire mnemonic completely in Portuguese, no English",
+        german: "German only — write the entire mnemonic completely in German, no English",
+        spanish: "Mexican Spanish only — write the entire mnemonic completely in Spanish, no English",
+        taiwanese: "Traditional Chinese only — write the entire mnemonic completely in Traditional Chinese (繁體中文), no English",
+        vietnamese: "Vietnamese only — write the entire mnemonic completely in Vietnamese, no English"
     };
 
     if (mnemonicLangSelect) {
         const savedMnemonicLang = localStorage.getItem('mnemonicLang');
-        if (savedMnemonicLang && MNEMONIC_LANG_PHRASES[savedMnemonicLang]) {
+        if (savedMnemonicLang && mnemonicStyles[savedMnemonicLang]) {
             mnemonicLangSelect.value = savedMnemonicLang;
         }
         mnemonicLangSelect.addEventListener('change', () => {
@@ -1204,8 +1204,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.readAsDataURL(state.uploadedFile);
             });
 
-            const mnemonicPhrase = MNEMONIC_LANG_PHRASES[mnemonicLangSelect?.value] || MNEMONIC_LANG_PHRASES.english;
-            const prompt = `Act as an expert Japanese OCR, translator, and a creative memory coach. Analyze the text in the image. For each word or phrase, provide: 1. The original Japanese writing (including Kanji). 2. Its reading in Hiragana (furigana). 3. Its English translation. 4. A short, creative, and memorable ${mnemonicPhrase}, connecting the Japanese sound to a memorable concept. Return the result as a JSON array of objects. Each object must have "japanese", "reading", "english", and "mnemonic" properties.`;
+            const selectedStyle = mnemonicStyles[mnemonicLangSelect?.value] || mnemonicStyles.english;
+            const prompt = `Act as an expert Japanese OCR, translator, and a creative memory coach. Analyze the text in the image. For each word or phrase, provide: 1. The original Japanese writing (including Kanji). 2. Its reading in Hiragana (furigana). 3. Its English translation. 4. A short memorable mnemonic to help remember this word. Write it COMPLETELY in ${selectedStyle}. Do not mix languages unless the style specifically says to mix. Return the result as a JSON array of objects. Each object must have "japanese", "reading", "english", and "mnemonic" properties.`;
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: state.uploadedFile.type, data: base64Data } }] }], generationConfig: { responseMimeType: "application/json", responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { "japanese": { "type": "STRING" }, "reading": { "type": "STRING" }, "english": { "type": "STRING" }, "mnemonic": { "type": "STRING" } }, required: ["japanese", "reading", "english", "mnemonic"] } } } };
             const localServerUrl = 'https://koicards-api.onrender.com/api/generate';
 
