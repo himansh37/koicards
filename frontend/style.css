@@ -770,6 +770,20 @@
                 font-size: 1rem;
             }
 
+            /* The three study buttons don't fit in one row on a phone.
+               The row now wraps (flex-wrap in the HTML); tighter padding
+               and nowrap labels mean whole buttons move to the next line
+               instead of words breaking inside a button. */
+            #repetition-buttons {
+                gap: 0.6rem;
+            }
+
+            #repetition-buttons button {
+                padding-left: 1rem;
+                padding-right: 1rem;
+                white-space: nowrap;
+            }
+
         }
 
         /* --- REDESIGNED PROGRESS VIEW --- */
