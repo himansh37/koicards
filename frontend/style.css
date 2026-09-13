@@ -770,17 +770,30 @@
                 font-size: 1rem;
             }
 
-            /* The three study buttons don't fit in one row on a phone.
-               The row now wraps (flex-wrap in the HTML); tighter padding
-               and nowrap labels mean whole buttons move to the next line
-               instead of words breaking inside a button. */
-            #repetition-buttons {
+            /* Study + deck action buttons: instead of a centered flex row that
+               wraps into ragged, different-width buttons, lay them out as a
+               2-column grid the same width as the flashcard above them.
+               Don't Repeat | Repeat on one row, Repeat Frequently spanning the
+               next, then Save | Export — straight edges, equal heights. */
+            #repetition-buttons,
+            #card-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
                 gap: 0.6rem;
+                width: 100%;
+                max-width: 400px; /* matches .flashcard-container */
             }
 
-            #repetition-buttons button {
-                padding-left: 1rem;
-                padding-right: 1rem;
+            #repeat-frequently-btn {
+                grid-column: 1 / -1;
+            }
+
+            #repetition-buttons button,
+            #card-actions button {
+                width: 100%;
+                padding: 0.8rem 0.5rem;
+                font-size: 0.9rem;
+                text-align: center;
                 white-space: nowrap;
             }
 

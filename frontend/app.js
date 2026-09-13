@@ -990,7 +990,9 @@ document.addEventListener('DOMContentLoaded', () => {
         currentFlashcard.innerHTML = '';
         currentFlashcard.style.display = 'block';
         flashcardDisplay.style.display = 'flex';
-        repetitionButtons.style.display = 'flex';
+        // Clear the inline display:none and let CSS decide the layout
+        // (Tailwind's flex class on desktop, a grid in the mobile media query).
+        repetitionButtons.style.display = '';
         saveDeckBtn.style.display = 'block';
         exportJsonBtn.style.display = 'block'; // Make sure export button is shown
 
