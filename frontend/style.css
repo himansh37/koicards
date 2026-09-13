@@ -1,6 +1,12 @@
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap');
 
         :root {
+            /* Inter/Outfit have no Japanese glyphs, so without this the
+               browser silently substitutes *some* system font for any
+               Japanese text — quality varies wildly by device. This
+               prioritizes known-good Japanese system fonts first. */
+            --jp-font-stack: 'Hiragino Kaku Gothic Pro', 'Yu Gothic', Meiryo, 'MS Gothic', 'Noto Sans JP', 'Inter', sans-serif;
+
             /* Google Material 3 Dark Theme Palette */
             --bg-color: #000000;
             --bg-gradient: radial-gradient(circle at 50% 0%, #1e1e1e 0%, #000000 100%);
@@ -164,6 +170,7 @@
             text-align: center;
             transition: background-color 0.3s, color 0.3s;
             border: 1px solid var(--glass-border);
+            font-family: var(--jp-font-stack);
         }
 
         .front {
@@ -243,6 +250,7 @@
             justify-content: center;
             font-weight: 600;
             font-size: 15px;
+            font-family: var(--jp-font-stack);
         }
 
         /* Chromium does honor color/background on <option>, so the open
@@ -431,6 +439,7 @@
             color: var(--text-primary-color);
             line-height: 1.2;
             min-height: 100px;
+            font-family: var(--jp-font-stack);
         }
 
         #test-options {
@@ -455,6 +464,7 @@
             align-items: center;
             min-height: 100px;
             backdrop-filter: blur(5px);
+            font-family: var(--jp-font-stack);
         }
 
         .test-option-btn:hover:not(:disabled) {
@@ -581,7 +591,7 @@
         }
 
         /* --- MOBILE RESPONSIVENESS --- */
-        @media (max-width: 768px) {
+        @media (max-width: 767px) {
             body {
                 padding: 1rem;
             }
@@ -783,7 +793,7 @@
            the win to whichever comes later in the file, media query or not,
            so placing this block earlier (as it originally was) silently
            made it dead on every mobile width, not just one device. */
-        @media (max-width: 768px) {
+        @media (max-width: 767px) {
             #progress-list {
                 grid-template-columns: 1fr;
                 gap: 0.75rem;
