@@ -18,22 +18,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const mnemonicLangSelect = document.getElementById('mnemonicLangSelect');
 
     // --- MNEMONIC LANGUAGE PREFERENCE ---
-    const mnemonicStyles = {
-        hinglish: "Hinglish (Hindi + English mix) — example: 'Kono sounds like KONO — yaad karo!'",
-        english: "English only — write the entire mnemonic in English only, no other language",
-        chinese: "Mandarin Chinese only — write the entire mnemonic completely in Mandarin Chinese (简体中文), no English",
-        korean: "Korean only — write the entire mnemonic completely in Korean (한국어), no English",
-        indonesian: "Bahasa Indonesia only — write the entire mnemonic completely in Bahasa Indonesia, no English",
-        portuguese: "Brazilian Portuguese only — write the entire mnemonic completely in Portuguese, no English",
-        german: "German only — write the entire mnemonic completely in German, no English",
-        spanish: "Mexican Spanish only — write the entire mnemonic completely in Spanish, no English",
-        taiwanese: "Traditional Chinese only — write the entire mnemonic completely in Traditional Chinese (繁體中文), no English",
-        vietnamese: "Vietnamese only — write the entire mnemonic completely in Vietnamese, no English"
-    };
+    // The prompt wording for each style lives on the server (backend/server.js),
+    // which builds the whole AI request itself. The client only sends the key.
+    const MNEMONIC_STYLE_KEYS = ['english', 'hinglish', 'chinese', 'korean', 'indonesian', 'portuguese', 'german', 'spanish', 'taiwanese', 'vietnamese'];
 
     if (mnemonicLangSelect) {
         const savedMnemonicLang = localStorage.getItem('mnemonicLang');
-        if (savedMnemonicLang && mnemonicStyles[savedMnemonicLang]) {
+        if (savedMnemonicLang && MNEMONIC_STYLE_KEYS.includes(savedMnemonicLang)) {
             mnemonicLangSelect.value = savedMnemonicLang;
         }
         mnemonicLangSelect.addEventListener('change', () => {
@@ -445,13 +436,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="progress-score">${averageScore}</span>
                 </div>
                 <div class="progress-card-info">
-                    <h3>${deckName}</h3>
+                    <h3></h3>
                     <div class="progress-stats">
                         <span>Tests: ${deckHistory.length}</span>
                         <span style="color: ${color}">Best: ${bestScore}%</span>
                     </div>
                 </div>
             `;
+
+            // Deck names are user-typed: set as text, never interpolated into HTML.
+            card.querySelector('h3').textContent = deckName;
 
             progressList.appendChild(card);
         });
@@ -691,6 +685,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const newDeckName = deckNameInput.value.trim();
         if (!newDeckName) {
             showToast("Please enter a deck name.", true);
+            return;
+        }
+        // Decks are stored as keys on a plain object; these names would hit the
+        // prototype instead of becoming a key and silently fail to save.
+        if (['__proto__', 'constructor', 'prototype'].includes(newDeckName)) {
+            showToast("That name isn't allowed. Please choose another.");
             return;
         }
 
@@ -1149,6 +1149,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const input = document.createElement(multiline ? 'textarea' : 'input');
             if (!multiline) input.type = 'text';
             input.className = 'card-edit-input';
+            input.maxLength = multiline ? 500 : 200;
             input.value = value || '';
             wrap.appendChild(input);
 
@@ -1332,47 +1333,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.readAsDataURL(state.uploadedFile);
             });
 
-            const selectedStyle = mnemonicStyles[mnemonicLangSelect?.value] || mnemonicStyles.english;
-            const prompt = `Act as an expert Japanese OCR, translator, and a creative memory coach. Analyze the text in the image. For each word or phrase, provide: 1. The original Japanese writing (including Kanji). 2. Its reading in Hiragana (furigana). 3. Its English translation. 4. A short memorable mnemonic to help remember this word. Write it COMPLETELY in ${selectedStyle}. Do not mix languages unless the style specifically says to mix. Return the result as a JSON array of objects. Each object must have "japanese", "reading", "english", and "mnemonic" properties.`;
-            const payload = { contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: state.uploadedFile.type, data: base64Data } }] }], generationConfig: { responseMimeType: "application/json", responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { "japanese": { "type": "STRING" }, "reading": { "type": "STRING" }, "english": { "type": "STRING" }, "mnemonic": { "type": "STRING" } }, required: ["japanese", "reading", "english", "mnemonic"] } } } };
+            const mnemonicStyle = MNEMONIC_STYLE_KEYS.includes(mnemonicLangSelect?.value) ? mnemonicLangSelect.value : 'english';
             const localServerUrl = 'https://koicards-api.onrender.com/api/generate';
 
-            // 2. Send the payload to your server (Your server will add the key)
+            // The server builds the actual AI request; the client only sends the
+            // image and which mnemonic style it wants.
             const response = await fetch(localServerUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    image: base64Data,
+                    mimeType: state.uploadedFile.type,
+                    mnemonicStyle
+                })
             });
             if (!response.ok) {
+                const errorBody = await response.json().catch(() => null);
                 if (response.status === 429) {
-                    const errorBody = await response.json().catch(() => null);
                     statusMessage.textContent = errorBody?.error || "You've used today's free limit. Please try again tomorrow.";
                     statusMessage.classList.add('text-red-500');
                     return; // finally block below still runs and resets the loading state
                 }
-                throw new Error(`API error: ${response.statusText}`);
+                // The server only ever sends short, user-safe messages in `error`.
+                const err = new Error(errorBody?.error || `API error: ${response.statusText}`);
+                err.userFacing = !!errorBody?.error;
+                throw err;
             }
             const result = await response.json();
-            if (result.candidates?.[0]?.content?.parts?.[0]) {
-                const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
-                if (parsedJson?.length > 0) {
-                    state.flashcardsData = parsedJson;
-                    state.currentCardIndex = 0;
-                    state.currentDeckName = null; // freshly generated, not yet saved
+            const cards = Array.isArray(result?.cards) ? result.cards : [];
+            if (cards.length > 0) {
+                state.flashcardsData = cards;
+                state.currentCardIndex = 0;
+                state.currentDeckName = null; // freshly generated, not yet saved
 
-                    // USER REQUEST: Reset streak to 1 when generating flashcards from a new image
-                    deckManager.setStreak(1);
-                    renderStreak();
+                // USER REQUEST: Reset streak to 1 when generating flashcards from a new image
+                deckManager.setStreak(1);
+                renderStreak();
 
-                    showNextCard();
-                    flashcardDisplay.style.display = 'flex';
-                    statusMessage.textContent = 'Flashcards generated!';
-                    statusMessage.classList.remove('text-red-500');
-                } else { statusMessage.textContent = 'No words found in the image.'; }
-            } else { statusMessage.textContent = 'API response issue.'; }
+                showNextCard();
+                flashcardDisplay.style.display = 'flex';
+                statusMessage.textContent = 'Flashcards generated!';
+                statusMessage.classList.remove('text-red-500');
+            } else {
+                statusMessage.textContent = 'No words found in the image.';
+            }
         } catch (error) {
             console.error('Error generating flashcards:', error);
-            statusMessage.textContent = 'Something went wrong generating flashcards. Please try again.';
+            statusMessage.textContent = error.userFacing
+                ? error.message
+                : 'Something went wrong generating flashcards. Please try again.';
             statusMessage.classList.add('text-red-500');
         } finally {
             loadingSpinner.style.display = 'none';

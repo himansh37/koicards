@@ -54,7 +54,7 @@ Installable as a PWA. `manifest.json` and service worker (`sw.js`) are implement
 New visitors with an empty account are automatically given a small pre-loaded "Japanese Greetings" deck (5 common phrases), so there's something to study and test immediately, before ever uploading an image.
 
 ### 10. API abuse protection
-The `/api/generate` endpoint is rate-limited server-side: 5 requests per IP per 24 hours, plus a 150-requests-per-day global cap shared across all visitors, protecting the free Gemini quota from runaway or malicious use. See `API_QUOTA_PLAN.md` for the full reasoning and future phases.
+The `/api/generate` endpoint is rate-limited server-side: 5 requests per IP per 24 hours, plus a 150-requests-per-day global cap shared across all visitors, protecting the free Gemini quota from runaway or malicious use. The server also builds the entire AI request itself — clients can only send an image (PNG/JPEG/WebP/HEIC, max 5 MB) and a mnemonic-style key, so the endpoint can't be repurposed as a general AI proxy — and browser access is restricted to the app's own origin. See `API_QUOTA_PLAN.md` and `SECURITY_REPORT.md` for the full reasoning.
 
 ## What it is *not* (yet) — important context
 - **No accounts, no cloud sync.** Every deck, every test result, every streak lives only in that one browser's `localStorage`. Clear your browser data, switch devices, or use a different browser, and it's all gone. This is the single biggest structural limitation right now — see `ROADMAP.md`.
