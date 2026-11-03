@@ -171,7 +171,8 @@ async function generateMnemonicBatch(cards, styleKey) {
         generationConfig: {
             responseMimeType: 'application/json',
             responseSchema: MNEMONIC_RESPONSE_SCHEMA,
-            maxOutputTokens: 8192
+            thinkingConfig: { thinkingBudget: 0 },
+            maxOutputTokens: 16384
         }
     };
 
@@ -186,7 +187,11 @@ async function generateMnemonicBatch(cards, styleKey) {
                 timeout: GEMINI_MNEMONIC_TIMEOUT_MS
             });
 
-            const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            const candidate = response.data?.candidates?.[0];
+            if (candidate?.finishReason === 'MAX_TOKENS') {
+                throw new Error('Gemini truncated a mnemonic batch.');
+            }
+            const text = candidate?.content?.parts?.[0]?.text;
             const parsed = JSON.parse(text);
             if (!Array.isArray(parsed) || parsed.length !== cards.length) {
                 throw new Error('Gemini returned an incomplete mnemonic batch.');
@@ -214,6 +219,21 @@ async function generateMnemonicBatch(cards, styleKey) {
         }
     }
     throw lastError;
+}
+
+async function generateMnemonicBatchWithFallback(cards, styleKey) {
+    try {
+        return await generateMnemonicBatch(cards, styleKey);
+    } catch (error) {
+        const status = error.response?.status;
+        if (cards.length <= 25 || status === 401 || status === 403 || status === 429) throw error;
+
+        const splitIndex = Math.ceil(cards.length / 2);
+        console.warn(`Retrying an incomplete mnemonic batch as ${splitIndex} and ${cards.length - splitIndex} cards.`);
+        const firstHalf = await generateMnemonicBatchWithFallback(cards.slice(0, splitIndex), styleKey);
+        const secondHalf = await generateMnemonicBatchWithFallback(cards.slice(splitIndex), styleKey);
+        return [...firstHalf, ...secondHalf];
+    }
 }
 
 // Runs BEFORE the rate limiters so a malformed request doesn't cost anyone a
@@ -339,7 +359,7 @@ app.post('/api/generate-mnemonics', validateMnemonicRequest, perIpLimiter, globa
             const batchIndex = nextBatchIndex++;
             if (batchIndex >= batches.length) return;
             try {
-                generatedBatches[batchIndex] = await generateMnemonicBatch(batches[batchIndex], styleKey);
+                generatedBatches[batchIndex] = await generateMnemonicBatchWithFallback(batches[batchIndex], styleKey);
             } catch (error) {
                 error.mnemonicBatchIndex = batchIndex;
                 batchFailure = error;
