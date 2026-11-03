@@ -1447,7 +1447,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (missingMnemonicIndexes.length > 0) {
                     statusMessage.textContent = `Generating mnemonics for ${missingMnemonicIndexes.length} cards...`;
                     const mnemonicStyle = MNEMONIC_STYLE_KEYS.includes(mnemonicLangSelect?.value) ? mnemonicLangSelect.value : 'english';
-                    const mnemonicResponse = await fetch('https://koicards-api.onrender.com/api/generate-mnemonics', {
+                    const mnemonicEndpoint = 'https://koicards-api.onrender.com/api/generate-mnemonics';
+                    const mnemonicResponse = await fetch(mnemonicEndpoint, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1462,7 +1463,29 @@ document.addEventListener('DOMContentLoaded', () => {
                         const errorBody = await mnemonicResponse.json().catch(() => null);
                         throw new Error(errorBody?.error || `Mnemonic generation failed (${mnemonicResponse.status}).`);
                     }
-                    const mnemonicResult = await mnemonicResponse.json();
+                    const generationJob = await mnemonicResponse.json();
+                    if (!generationJob?.jobId) {
+                        throw new Error('The mnemonic service did not start the generation job. Please try again.');
+                    }
+
+                    let mnemonicResult;
+                    while (!mnemonicResult) {
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        const jobResponse = await fetch(`${mnemonicEndpoint}/${encodeURIComponent(generationJob.jobId)}`);
+                        const jobStatus = await jobResponse.json().catch(() => null);
+                        if (!jobResponse.ok) {
+                            throw new Error(jobStatus?.error || `Could not check mnemonic generation (${jobResponse.status}).`);
+                        }
+                        if (jobStatus?.status === 'failed') {
+                            throw new Error(jobStatus.error || 'Mnemonic generation failed. Please try again.');
+                        }
+                        if (jobStatus?.status === 'completed') {
+                            mnemonicResult = { mnemonics: jobStatus.mnemonics };
+                            break;
+                        }
+                        statusMessage.textContent = `Generating mnemonics... ${jobStatus?.completedCards || 0} of ${jobStatus?.totalCards || missingMnemonicIndexes.length}`;
+                    }
+
                     if (!Array.isArray(mnemonicResult?.mnemonics) || mnemonicResult.mnemonics.length !== missingMnemonicIndexes.length
                         || mnemonicResult.mnemonics.some(mnemonic => typeof mnemonic !== 'string' || !mnemonic.trim())) {
                         throw new Error('The AI could not generate mnemonics for every card. Please try again.');

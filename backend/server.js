@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const rateLimit = require('express-rate-limit');
+const { randomUUID } = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,7 +38,7 @@ app.use(cors({
         }
         return callback(null, false); // the browser will refuse to expose the response
     },
-    methods: ['POST'],
+    methods: ['GET', 'POST'],
 }));
 
 // A 5 MB image is ~6.8 MB as base64, plus a little JSON around it.
@@ -66,6 +67,13 @@ const globalLimiter = rateLimit({
     message: RATE_LIMIT_MESSAGE
 });
 
+const mnemonicJobPollLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
 // --- Gemini request construction -----------------------------------------
 // The server builds every Gemini request itself. Clients can provide image
 // bytes or validated vocabulary fields, plus a supported mnemonic style; they
@@ -76,6 +84,9 @@ const GEMINI_MNEMONIC_TIMEOUT_MS = 60 * 1000;
 const MAX_MNEMONIC_CARDS = 2500;
 const MNEMONIC_BATCH_SIZE = 200;
 const MNEMONIC_BATCH_CONCURRENCY = 3;
+const MNEMONIC_JOB_TTL_MS = 60 * 60 * 1000;
+const MAX_ACTIVE_MNEMONIC_JOBS = 3;
+const mnemonicJobs = new Map();
 
 const ALLOWED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif']);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -236,6 +247,48 @@ async function generateMnemonicBatchWithFallback(cards, styleKey) {
     }
 }
 
+async function generateAllMnemonics(cards, styleKey, onBatchComplete) {
+    const batches = [];
+    for (let index = 0; index < cards.length; index += MNEMONIC_BATCH_SIZE) {
+        batches.push(cards.slice(index, index + MNEMONIC_BATCH_SIZE));
+    }
+
+    const generatedBatches = new Array(batches.length);
+    let nextBatchIndex = 0;
+    let batchFailure = null;
+    const worker = async () => {
+        while (!batchFailure) {
+            const batchIndex = nextBatchIndex++;
+            if (batchIndex >= batches.length) return;
+            try {
+                generatedBatches[batchIndex] = await generateMnemonicBatchWithFallback(batches[batchIndex], styleKey);
+                onBatchComplete(batches[batchIndex].length);
+            } catch (error) {
+                error.mnemonicBatchIndex = batchIndex;
+                batchFailure = error;
+            }
+        }
+    };
+
+    await Promise.all(Array.from(
+        { length: Math.min(MNEMONIC_BATCH_CONCURRENCY, batches.length) },
+        () => worker()
+    ));
+
+    if (batchFailure) {
+        batchFailure.mnemonicBatchCount = batches.length;
+        throw batchFailure;
+    }
+    return generatedBatches.flat();
+}
+
+function removeExpiredMnemonicJobs() {
+    const expiryThreshold = Date.now() - MNEMONIC_JOB_TTL_MS;
+    for (const [jobId, job] of mnemonicJobs) {
+        if (job.createdAt < expiryThreshold) mnemonicJobs.delete(jobId);
+    }
+}
+
 // Runs BEFORE the rate limiters so a malformed request doesn't cost anyone a
 // quota point — only requests that will actually reach Gemini get counted.
 function validateGenerateRequest(req, res, next) {
@@ -338,51 +391,67 @@ app.post('/api/generate', validateGenerateRequest, perIpLimiter, globalLimiter, 
     }
 });
 
-app.post('/api/generate-mnemonics', validateMnemonicRequest, perIpLimiter, globalLimiter, async (req, res) => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
+async function runMnemonicJob(jobId, cards, styleKey) {
+    const job = mnemonicJobs.get(jobId);
+    if (!job) return;
+
+    try {
+        job.mnemonics = await generateAllMnemonics(cards, styleKey, completedCount => {
+            job.completedCards += completedCount;
+            job.updatedAt = Date.now();
+        });
+        job.status = 'completed';
+    } catch (error) {
+        const status = error.response?.status;
+        const detail = error.response?.data ? JSON.stringify(error.response.data).slice(0, 500) : '';
+        console.error(`Gemini mnemonic batch ${error.mnemonicBatchIndex + 1}/${error.mnemonicBatchCount} failed:`, status || error.code || error.message, detail);
+        job.status = 'failed';
+        job.error = status === 429
+            ? 'The AI service is busy right now. Please try again in a moment.'
+            : 'Mnemonic generation failed for part of the file. Please try again.';
+    }
+    job.updatedAt = Date.now();
+}
+
+app.post('/api/generate-mnemonics', validateMnemonicRequest, perIpLimiter, globalLimiter, (req, res) => {
+    if (!process.env.API_KEY) {
         console.error('API_KEY is not set in the environment.');
         return res.status(500).json({ error: 'Server is not configured.' });
     }
 
-    const styleKey = MNEMONIC_STYLES[req.body.mnemonicStyle] ? req.body.mnemonicStyle : DEFAULT_STYLE;
-    const batches = [];
-    for (let index = 0; index < req.mnemonicCards.length; index += MNEMONIC_BATCH_SIZE) {
-        batches.push(req.mnemonicCards.slice(index, index + MNEMONIC_BATCH_SIZE));
+    removeExpiredMnemonicJobs();
+    const activeJobs = [...mnemonicJobs.values()].filter(job => job.status === 'processing').length;
+    if (activeJobs >= MAX_ACTIVE_MNEMONIC_JOBS) {
+        return res.status(503).json({ error: 'The mnemonic service is busy. Please try again shortly.' });
     }
 
-    const generatedBatches = new Array(batches.length);
-    let nextBatchIndex = 0;
-    let batchFailure = null;
-    const worker = async () => {
-        while (!batchFailure) {
-            const batchIndex = nextBatchIndex++;
-            if (batchIndex >= batches.length) return;
-            try {
-                generatedBatches[batchIndex] = await generateMnemonicBatchWithFallback(batches[batchIndex], styleKey);
-            } catch (error) {
-                error.mnemonicBatchIndex = batchIndex;
-                batchFailure = error;
-            }
-        }
+    const jobId = randomUUID();
+    const job = {
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        status: 'processing',
+        completedCards: 0,
+        totalCards: req.mnemonicCards.length
     };
+    mnemonicJobs.set(jobId, job);
 
-    await Promise.all(Array.from(
-        { length: Math.min(MNEMONIC_BATCH_CONCURRENCY, batches.length) },
-        () => worker()
-    ));
+    const styleKey = MNEMONIC_STYLES[req.body.mnemonicStyle] ? req.body.mnemonicStyle : DEFAULT_STYLE;
+    void runMnemonicJob(jobId, req.mnemonicCards, styleKey);
+    return res.status(202).json({ jobId, totalCards: job.totalCards });
+});
 
-    if (batchFailure) {
-        const status = batchFailure.response?.status;
-        const detail = batchFailure.response?.data ? JSON.stringify(batchFailure.response.data).slice(0, 500) : '';
-        console.error(`Gemini mnemonic batch ${batchFailure.mnemonicBatchIndex + 1}/${batches.length} failed:`, status || batchFailure.code || batchFailure.message, detail);
-        if (status === 429) {
-            return res.status(503).json({ error: 'The AI service is busy right now. Please try again in a moment.' });
-        }
-        return res.status(502).json({ error: 'Mnemonic generation failed for a batch. Please try again.' });
-    }
+app.get('/api/generate-mnemonics/:jobId', mnemonicJobPollLimiter, (req, res) => {
+    removeExpiredMnemonicJobs();
+    const job = mnemonicJobs.get(req.params.jobId);
+    if (!job) return res.status(404).json({ error: 'Mnemonic generation job was not found or has expired.' });
 
-    return res.json({ mnemonics: generatedBatches.flat() });
+    return res.json({
+        status: job.status,
+        completedCards: job.completedCards,
+        totalCards: job.totalCards,
+        error: job.error,
+        mnemonics: job.status === 'completed' ? job.mnemonics : undefined
+    });
 });
 
 // JSON error responses for body-parser failures instead of Express's HTML pages.
