@@ -14,6 +14,7 @@ function filterDecks(query) {
 document.addEventListener('DOMContentLoaded', () => {
     // --- Element Selectors ---
     const imageUpload = document.getElementById('imageUpload');
+    const cardsFileUpload = document.getElementById('cardsFileUpload');
     const generateBtn = document.getElementById('generateBtn');
     const mnemonicLangSelect = document.getElementById('mnemonicLangSelect');
 
@@ -87,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- State Variables ---
     const state = {
         uploadedFile: null,
+        cardsFile: null,
         lastMotivationalQuoteIndex: -1,
         flashcardsData: [],
         currentCardIndex: 0,
@@ -978,9 +980,104 @@ document.addEventListener('DOMContentLoaded', () => {
     imageUpload.addEventListener('change', (event) => {
         state.uploadedFile = event.target.files[0];
         if (state.uploadedFile) {
+            state.cardsFile = null;
+            cardsFileUpload.value = '';
             statusMessage.textContent = `Image "${state.uploadedFile.name}" selected.`;
+            statusMessage.classList.remove('text-red-500');
             statusMessage.classList.add('text-green-500');
         }
+    });
+
+    function parseCsv(text) {
+        const rows = [];
+        let row = [];
+        let cell = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            if (inQuotes) {
+                if (char === '"' && text[i + 1] === '"') {
+                    cell += '"';
+                    i++;
+                } else if (char === '"') {
+                    inQuotes = false;
+                } else {
+                    cell += char;
+                }
+            } else if (char === '"' && cell.length === 0) {
+                inQuotes = true;
+            } else if (char === ',') {
+                row.push(cell);
+                cell = '';
+            } else if (char === '\n' || char === '\r') {
+                row.push(cell);
+                if (row.some(value => value.trim() !== '')) rows.push(row);
+                row = [];
+                cell = '';
+                if (char === '\r' && text[i + 1] === '\n') i++;
+            } else {
+                cell += char;
+            }
+        }
+        if (inQuotes) throw new Error('CSV contains an unclosed quoted field.');
+        row.push(cell);
+        if (row.some(value => value.trim() !== '')) rows.push(row);
+        if (rows.length === 0) throw new Error('The CSV file is empty.');
+
+        const headers = rows[0].map(value => value.trim().toLowerCase());
+        const hasHeaders = headers.some(header => ['japanese', 'jp', 'term', 'front', 'question'].includes(header))
+            && headers.some(header => ['english', 'en', 'translation', 'definition', 'back', 'answer'].includes(header));
+        if (hasHeaders) {
+            return rows.slice(1).map(values => Object.fromEntries(headers.map((header, index) => [header, values[index] || ''])));
+        }
+
+        // Headerless vocabulary lists (such as MNNvocab.csv) use Japanese, reading, English.
+        return rows
+            .filter(values => values.length >= 3 && !/^lesson\b/i.test((values[0] || '').trim()))
+            .map(values => ({ japanese: values[0], reading: values[1], english: values[2] }));
+    }
+
+    function normalizeImportedCards(records) {
+        if (!Array.isArray(records) || records.length === 0) {
+            throw new Error('The file must contain a non-empty array of flashcards.');
+        }
+
+        const getField = (record, names) => {
+            for (const name of names) {
+                const key = Object.keys(record).find(candidate => candidate.trim().toLowerCase() === name);
+                if (key !== undefined && record[key] !== null && record[key] !== undefined) return String(record[key]).trim();
+            }
+            return '';
+        };
+
+        return records.map((record, index) => {
+            if (!record || typeof record !== 'object' || Array.isArray(record)) {
+                throw new Error(`Card ${index + 1} must be an object.`);
+            }
+            const japanese = getField(record, ['japanese', 'jp', 'term', 'front', 'question']);
+            const english = getField(record, ['english', 'en', 'translation', 'definition', 'back', 'answer']);
+            if (!japanese || !english) {
+                throw new Error(`Card ${index + 1} needs Japanese and English values (or front and back).`);
+            }
+            return {
+                japanese,
+                reading: getField(record, ['reading', 'kana', 'pronunciation']),
+                english,
+                mnemonic: getField(record, ['mnemonic', 'hint', 'notes'])
+            };
+        });
+    }
+
+    cardsFileUpload.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        state.cardsFile = file;
+        state.uploadedFile = null;
+        imageUpload.value = '';
+        statusMessage.classList.remove('text-red-500');
+        statusMessage.textContent = `File "${file.name}" selected. Click Generate Flashcards to create your cards.`;
+        statusMessage.classList.add('text-green-500');
     });
 
     const emptyStarSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M11.99 4.316l1.373 4.144h4.358l-3.53 2.564 1.373 4.144L12 13.992l-3.564 2.176 1.373-4.144L6.27 8.46h4.358zM12 2l-3.09 9.29L2 12l5.91 3.71L4.69 22L12 17l7.31 5l-3.22-6.29L22 12l-6.91-2.71z" /></svg>`;
@@ -1313,14 +1410,15 @@ document.addEventListener('DOMContentLoaded', () => {
     repeatFrequentlyBtn.addEventListener('click', () => handleRepetition('frequently'));
 
     generateBtn.addEventListener('click', async () => {
-        if (!state.uploadedFile) {
-            statusMessage.textContent = 'Please select an image first.';
+        if (!state.uploadedFile && !state.cardsFile) {
+            statusMessage.textContent = 'Please select an image or CSV/JSON file first.';
             statusMessage.classList.add('text-red-500');
             return;
         }
         if (generateBtn.disabled) return; // guard against double-submit while a request is already in flight
 
-        statusMessage.textContent = 'Analyzing image...';
+        const cardsFile = state.cardsFile;
+        statusMessage.textContent = cardsFile ? 'Creating flashcards from file...' : 'Analyzing image...';
         statusMessage.classList.remove('text-red-500');
         loadingSpinner.style.display = 'block';
         flashcardDisplay.style.display = 'none';
@@ -1328,6 +1426,59 @@ document.addEventListener('DOMContentLoaded', () => {
         generateBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
         try {
+            if (cardsFile) {
+                const contents = (await cardsFile.text()).replace(/^\uFEFF/, '');
+                const extension = cardsFile.name.split('.').pop().toLowerCase();
+                let records;
+                if (extension === 'csv') {
+                    records = parseCsv(contents);
+                } else if (extension === 'json') {
+                    const parsed = JSON.parse(contents);
+                    records = Array.isArray(parsed) ? parsed : parsed?.cards;
+                } else {
+                    throw new Error('Choose a .csv or .json file.');
+                }
+
+                const cards = normalizeImportedCards(records);
+                const missingMnemonicIndexes = cards
+                    .map((card, index) => card.mnemonic ? -1 : index)
+                    .filter(index => index >= 0);
+
+                if (missingMnemonicIndexes.length > 0) {
+                    statusMessage.textContent = `Generating mnemonics for ${missingMnemonicIndexes.length} cards...`;
+                    const mnemonicStyle = MNEMONIC_STYLE_KEYS.includes(mnemonicLangSelect?.value) ? mnemonicLangSelect.value : 'english';
+                    const mnemonicResponse = await fetch('https://koicards-api.onrender.com/api/generate-mnemonics', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            cards: missingMnemonicIndexes.map(index => {
+                                const { japanese, reading, english } = cards[index];
+                                return { japanese, reading, english };
+                            }),
+                            mnemonicStyle
+                        })
+                    });
+                    if (!mnemonicResponse.ok) {
+                        const errorBody = await mnemonicResponse.json().catch(() => null);
+                        throw new Error(errorBody?.error || `Mnemonic generation failed (${mnemonicResponse.status}).`);
+                    }
+                    const mnemonicResult = await mnemonicResponse.json();
+                    if (!Array.isArray(mnemonicResult?.mnemonics) || mnemonicResult.mnemonics.length !== missingMnemonicIndexes.length
+                        || mnemonicResult.mnemonics.some(mnemonic => typeof mnemonic !== 'string' || !mnemonic.trim())) {
+                        throw new Error('The AI could not generate mnemonics for every card. Please try again.');
+                    }
+                    missingMnemonicIndexes.forEach((cardIndex, index) => {
+                        cards[cardIndex].mnemonic = mnemonicResult.mnemonics[index].trim();
+                    });
+                }
+
+                startStudySession(cards);
+                statusMessage.textContent = `${cards.length} cards with mnemonics generated. Save Current Deck to keep them in My Decks.`;
+                cardsFileUpload.value = '';
+                state.cardsFile = null;
+                return;
+            }
+
             const base64Data = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result.split(',')[1]);
@@ -1383,7 +1534,9 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error generating flashcards:', error);
             statusMessage.textContent = error.userFacing
                 ? error.message
-                : 'Something went wrong generating flashcards. Please try again.';
+                : error instanceof SyntaxError
+                    ? 'The JSON file could not be read. Check that it contains valid JSON.'
+                    : error.message || 'Something went wrong generating flashcards. Please try again.';
             statusMessage.classList.add('text-red-500');
         } finally {
             loadingSpinner.style.display = 'none';
