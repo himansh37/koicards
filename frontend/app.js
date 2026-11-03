@@ -1444,6 +1444,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     .map((card, index) => card.mnemonic ? -1 : index)
                     .filter(index => index >= 0);
 
+                if (missingMnemonicIndexes.length > 200) {
+                    throw new Error(`This file has ${missingMnemonicIndexes.length} cards without mnemonics. Generate up to 200 at a time; split the file into smaller batches and upload each one.`);
+                }
+
                 if (missingMnemonicIndexes.length > 0) {
                     statusMessage.textContent = `Generating mnemonics for ${missingMnemonicIndexes.length} cards...`;
                     const mnemonicStyle = MNEMONIC_STYLE_KEYS.includes(mnemonicLangSelect?.value) ? mnemonicLangSelect.value : 'english';
